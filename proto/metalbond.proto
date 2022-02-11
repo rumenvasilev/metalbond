@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package metalbond;
+option go_package = "./proto";
+
+enum IPVersion {
+    IPv4 = 0;
+    IPv6 = 1;
+}
+
+enum Action {
+    ADD = 0;
+    REMOVE = 1;
+}
+
+enum ErrorType {
+    NO_ERROR = 0;
+    CLOSE = 1;     // Indicates the connection will be closed (SIGTERM)
+}
+
+message Empty {}
+
+message Error {
+    ErrorType type = 1;
+    string message = 2;
+}
+
+message Hello {
+    bytes nodeId = 1;
+    string hostname = 2;
+    uint32 keepaliveInterval = 3;
+    uint32 keepaliveTimeout = 4;
+}
+
+message Subscription {
+    uint32 vni = 1;
+}
+
+message Update {
+    uint32 vni = 1;
+    Action action = 2;
+    repeated Route routes = 3;
+}
+
+message Route {
+    IPVersion ipVersion = 1;
+    bytes prefix = 2;
+    uint32 prefixLength = 3;
+    bytes destinationAddress = 4;
+    uint32 destinationVNI = 5;
+    uint32 destinationParams = 6;
+    bool natTarget = 7;
+    uint32 natPortRangeFrom = 8;
+    uint32 natPortRangeTo = 9;
+}
+
+service MetalBond {
+    rpc hello(Hello) returns (Hello) {}
+    rpc keepalive(stream Error) returns (stream Error) {}
+    rpc subscribe(Subscription) returns (Error) {}
+    rpc unsubscribe(Subscription) returns (Error) {}
+    rpc update(stream Update) returns (stream Update) {}
+}
