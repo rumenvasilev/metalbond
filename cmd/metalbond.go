@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/alecthomas/kong"
+	"github.com/google/uuid"
+	"github.com/onmetal/metalbond"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -25,7 +27,12 @@ func main() {
 	ctx := kong.Parse(&CLI)
 	switch ctx.Command() {
 	case "server":
-		log.Infof("Server")
+		serverConfig := metalbond.ServerConfig{
+			ListenAddress: CLI.Server.Listen,
+			NodeUUID:      uuid.MustParse(CLI.Server.NodeUUID),
+			Hostname:      CLI.Server.Hostname,
+		}
+		metalbond.StartServer(serverConfig)
 	case "client":
 		log.Infof("Client")
 		log.Infof("  servers: %v", CLI.Client.Server)
