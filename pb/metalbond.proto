@@ -25,19 +25,19 @@ message Subscription {
 }
 
 message Update {
-    uint32 vni = 1;
-    Action action = 2;
-    Route route = 3;
+    Action action = 1;
+    Route route = 2;
 }
 
 message Route {
-    IPVersion ipVersion = 1;
-    bytes prefix = 2;
-    uint32 prefixLength = 3;
-    bytes destinationAddress = 4;
-    uint32 destinationVNI = 5;
-    uint32 destinationParams = 6;
-    bool natTarget = 7;
-    uint32 natPortRangeFrom = 8;
-    uint32 natPortRangeTo = 9;
+    uint32 vni = 1;
+    IPVersion ipVersion = 2;
+    bytes prefix = 3;
+    uint32 prefixLength = 4;
+    bytes destinationAddress = 5;
+    uint32 destinationVNI = 6;
+    uint32 destinationParams = 7;
+    bool natTarget = 8;
+    uint32 natPortRangeFrom = 9;
+    uint32 natPortRangeTo = 10;
 }

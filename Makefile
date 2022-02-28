@@ -3,18 +3,25 @@ all:
 	cd cmd && go build -o ../target/metalbond
 
 run-server: all
-	cd target && ./metalbond server --listen [::]:1337 \
+	cd target && ./metalbond server -v \
+		--listen [::]:1337 \
 		--node-uuid 4c85bf91-b45e-4e64-99d7-0ae2c89af502 \
-		--hostname fra4-router-1
+		--hostname server-1
 
 run-client1: all
-	cd target && ./metalbond client --server [::1]:1337 \
+	cd target && ./metalbond client -v \
+		--server [::1]:1337 \
+		--node-uuid 9517e08c-454e-49bc-8cad-f82db1b4e067 \
+		--hostname client-1 \
 		--subscribe 23 \
 		--announce 23#2001:db8:1::/48 \
 		--announce 23#192.168.0.0/16
 
 run-client2: all
-	cd target && ./metalbond client --server [::1]:1337 \
+	cd target && ./metalbond client -v \
+		--server [::1]:1337 \
+		--node-uuid e461e9b1-40e2-4246-870e-2836ca961fe7 \
+		--hostname client-2 \
 		--subscribe 23 \
 		--subscribe 42 \
 		--announce 23#2001:db8:2::/48 \

@@ -1,6 +1,7 @@
 package metalbond
 
 import (
+	"io"
 	"net"
 
 	"github.com/onmetal/metalbond/pb"
@@ -38,71 +39,81 @@ func StartTCPServer(c ServerConfig) error {
 }
 
 func handleClientConnection(conn net.Conn) {
+	log := log.WithField("peer", conn.RemoteAddr())
+
+	log.Infof("Client connected")
 	buf := make([]byte, 65535)
 
-	// TODO: read full packets!!!!
-	reqLen, err := conn.Read(buf)
-	if err != nil {
-		log.Errorf("Error reading from socket: %v", err)
-	}
-
-	log.Infof("Received %d bytes", reqLen)
-
-	pktVersion := buf[0]
-	switch pktVersion {
-	case 1:
-		pktLen := uint16(buf[1])<<8 + uint16(buf[2])
-		pktType := MESSAGE_TYPE(buf[3])
-		pktBytes := buf[4 : pktLen+4]
-
-		switch pktType {
-		case HELLO:
-			log.Infof("HELLO message received")
-			msg := &pb.Hello{}
-			if err := proto.Unmarshal(pktBytes, msg); err != nil {
-				log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
+	for {
+		// TODO: read full packets!!!!
+		reqLen, err := conn.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				log.Debugf("Client has disconnected.")
 				return
 			}
-			log.Infof("Content: %v", msg)
-
-		case KEEPALIVE:
-			log.Infof("KEEPALIVE message received")
-			// NO CONTENT
-
-		case SUBSCRIBE:
-			log.Infof("SUBSCRIBE message received")
-			msg := &pb.Subscription{}
-			if err := proto.Unmarshal(pktBytes, msg); err != nil {
-				log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
-				return
-			}
-			log.Infof("Content: %v", msg)
-
-		case UNSUBSCRIBE:
-			log.Infof("UNSUBSCRIBE message received")
-			msg := &pb.Subscription{}
-			if err := proto.Unmarshal(pktBytes, msg); err != nil {
-				log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
-				return
-			}
-			log.Infof("Content: %v", msg)
-
-		case UPDATE:
-			log.Infof("UPDATE message received")
-			msg := &pb.Update{}
-			if err := proto.Unmarshal(pktBytes, msg); err != nil {
-				log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
-				return
-			}
-			log.Infof("Content: %v", msg)
-
-		default:
-			log.Errorf("Unknown Packet received. Closing connection.")
+			log.Errorf("Error reading from socket: %v", err)
 			return
 		}
-	default:
-		log.Errorf("Incompatible Client version. Closing connection.")
-		conn.Close()
-		return
+
+		log.Debugf("Received %d bytes", reqLen)
+
+		pktVersion := buf[0]
+		switch pktVersion {
+		case 1:
+			pktLen := uint16(buf[1])<<8 + uint16(buf[2])
+			pktType := MESSAGE_TYPE(buf[3])
+			pktBytes := buf[4 : pktLen+4]
+
+			switch pktType {
+			case HELLO:
+				log.Infof("HELLO message received")
+				msg := &pb.Hello{}
+				if err := proto.Unmarshal(pktBytes, msg); err != nil {
+					log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
+					return
+				}
+				log.Infof("Content: %s", msg)
+
+			case KEEPALIVE:
+				log.Infof("KEEPALIVE message received")
+				// NO CONTENT
+
+			case SUBSCRIBE:
+				log.Infof("SUBSCRIBE message received")
+				msg := &pb.Subscription{}
+				if err := proto.Unmarshal(pktBytes, msg); err != nil {
+					log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
+					return
+				}
+				log.Infof("Content: %v", msg)
+
+			case UNSUBSCRIBE:
+				log.Infof("UNSUBSCRIBE message received")
+				msg := &pb.Subscription{}
+				if err := proto.Unmarshal(pktBytes, msg); err != nil {
+					log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
+					return
+				}
+				log.Infof("Content: %v", msg)
+
+			case UPDATE:
+				log.Infof("UPDATE message received")
+				msg := &pb.Update{}
+				if err := proto.Unmarshal(pktBytes, msg); err != nil {
+					log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
+					return
+				}
+				log.Infof("Content: %v", msg)
+
+			default:
+				log.Errorf("Unknown Packet received. Closing connection.")
+				return
+			}
+		default:
+			log.Errorf("Incompatible Client version. Closing connection.")
+			conn.Close()
+			return
+		}
 	}
 }
