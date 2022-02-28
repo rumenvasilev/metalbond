@@ -10,7 +10,7 @@ MetalBond Protocol v1
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |    Version    |  Msg. Length (Little Endian)  |   Msg. Type   |
+    |    Version    |    Msg. Length (Big Endian)   |   Msg. Type   |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                                                               |
     |               Variable-Length Protobuf Message                |
