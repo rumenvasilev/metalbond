@@ -90,5 +90,6 @@ func sendMessage(msgType MESSAGE_TYPE, msg protoreflect.ProtoMessage, conn net.C
 }
 
 func expectMessage(msgType MESSAGE_TYPE, conn net.Conn) ([]byte, error) {
+
 	return nil, nil
 }

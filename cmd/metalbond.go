@@ -42,7 +42,7 @@ func main() {
 			Hostname:      CLI.Server.Hostname,
 		}
 
-		metalbond.StartServer(serverConfig)
+		metalbond.NewServer(serverConfig)
 
 	case "client":
 		log.Infof("Client")
@@ -57,7 +57,7 @@ func main() {
 			NodeUUID: uuid.MustParse((CLI.Client.NodeUUID)),
 			Hostname: CLI.Client.Hostname,
 		}
-		metalbond.StartClient(clientConfig)
+		metalbond.NewClient(clientConfig)
 
 	default:
 		log.Errorf("Error: %v", ctx.Command())

@@ -30,3 +30,6 @@ run-client2: all
 .PHONY: proto
 proto:
 	protoc -I ./pb --go_out=. ./pb/metalbond.proto
+
+clean:
+	rm -rf target
