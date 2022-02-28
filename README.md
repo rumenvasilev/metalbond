@@ -1,8 +1,10 @@
 MetalBond
 =========
 
-Packet Format
--------------
+MetalBond Protocol v1
+---------------------
+
+### Packet Format
 
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -17,15 +19,14 @@ Packet Format
     |                                                               |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-`Version` must be 1.
-`Msg. Length` defines the length of the following `Variable-Length Protobuf Message`.
-`Msg. Type` identifies the type of the following Protobuf Message.
+* `Version` must be 1.
+* `Msg. Length` defines the length of the following `Variable-Length Protobuf Message`.
+* `Msg. Type` identifies the type of the following Protobuf Message.
 
 The metalbond protocol relies on IPv6 transport. Therefore we assume a minimum MTU of 1280 bytes. To prevent fragmentation all metalbond messages must not be larger than 1220 bytes overall (40 bytes IPv6 header, 20 bytes TCP header) - i.e. the variable-length protobuf message must not be longer than 1188 bytes.
 
 
-Message Types
--------------
+### Message Types
 
 | Type ID | Message Type |
 |---------|--------------|
@@ -36,19 +37,19 @@ Message Types
 | 5       | UPDATE       |
 
 
-### HELLO Message
+#### HELLO Message
 
 
-### KEEPALIVE Message
+#### KEEPALIVE Message
 
 
-### SUBSCRIBE Message
+#### SUBSCRIBE Message
 
 
-### UNSUBSCRIBE Message
+#### UNSUBSCRIBE Message
 
 
-### UPDATE Message
+#### UPDATE Message
 
 
 License
