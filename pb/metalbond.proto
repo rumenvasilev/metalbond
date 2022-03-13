@@ -16,28 +16,32 @@ enum Action {
 message Hello {
     bytes nodeId = 1;
     string hostname = 2;
-    uint32 keepaliveInterval = 3;
-    uint32 keepaliveTimeout = 4;
+    bool isReflector = 3;
+    uint32 keepaliveInterval = 4;
 }
 
 message Subscription {
-    uint32 vni = 1;
+    Action action = 1;
+    uint32 vni = 2;
 }
 
 message Update {
     Action action = 1;
-    Route route = 2;
+    uint32 vni = 2;
+    Destination destination = 3;
+    NextHop nextHop = 4;
 }
 
-message Route {
-    uint32 vni = 1;
-    IPVersion ipVersion = 2;
-    bytes prefix = 3;
-    uint32 prefixLength = 4;
-    bytes destinationAddress = 5;
-    uint32 destinationVNI = 6;
-    uint32 destinationParams = 7;
-    bool natTarget = 8;
-    uint32 natPortRangeFrom = 9;
-    uint32 natPortRangeTo = 10;
+message Destination {
+    IPVersion ipVersion = 1;
+    bytes prefix = 2;
+    uint32 prefixLength = 3;
+}
+
+message NextHop {
+    bytes targetAddress = 1;
+    uint32 targetVNI = 2;
+    bool nat = 3;
+    uint32 natPortRangeFrom = 4;
+    uint32 natPortRangeTo = 5;
 }

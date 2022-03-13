@@ -9,7 +9,7 @@ import (
 
 var CLI struct {
 	Server struct {
-		Listen   string `help:"listen address. e.g. [::]:1337"`
+		Listen   string `help:"listen address. e.g. [::]:4711"`
 		NodeUUID string `help:"Node UUID"`
 		Hostname string `help:"Hostname"`
 		Verbose  bool   `help:"Enable debug logging" short:"v"`

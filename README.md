@@ -6,6 +6,8 @@ MetalBond Protocol v1
 
 ### Packet Format
 
+MetalBond packets are transferred via TCP ontop of IPv6. The default TCP port is 4711.
+
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     

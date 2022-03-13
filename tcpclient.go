@@ -3,12 +3,54 @@ package metalbond
 import (
 	"fmt"
 	"net"
+	"os"
+	"os/signal"
 
+	"github.com/google/uuid"
 	"github.com/onmetal/metalbond/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
+
+type ClientConfig struct {
+	Servers  []string
+	NodeUUID uuid.UUID
+	Hostname string
+}
+
+func NewClient(c ClientConfig) error {
+	log.Infof("starting client...")
+
+	database := MetalBondDatabase{}
+
+	for _, server := range c.Servers {
+		StartTCPClient(server, c)
+
+		conn, err := net.Dial("tcp", server)
+		if err != nil {
+			log.Fatalf("Cannot connect to server %s - %v", server, err)
+		}
+		defer conn.Close()
+
+		log.Infof("Connected to %s", server)
+
+		NewMetalBondPeer(
+			conn,
+			OUTGOING,
+			&database,
+		)
+	}
+
+	// Wait for SIGINT
+	cint := make(chan os.Signal, 1)
+	signal.Notify(cint, os.Interrupt)
+	<-cint
+
+	// TODO implement graceful shutdown
+
+	return nil
+}
 
 func StartTCPClient(server string, c ClientConfig) {
 	log := log.WithField("server", server)
@@ -75,7 +117,7 @@ func sendMessage(msgType MESSAGE_TYPE, msg protoreflect.ProtoMessage, conn net.C
 		}
 	}
 
-	hdr := []byte{1, byte((len(msgBytes) >> 8) % 8), byte(len(msgBytes) % 8), byte(msgType)}
+	hdr := []byte{1, byte(len(msgBytes) >> 8), byte(len(msgBytes) % 256), byte(msgType)}
 	pkt := append(hdr, msgBytes...)
 
 	n, err := conn.Write(pkt)
