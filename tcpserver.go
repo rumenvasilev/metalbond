@@ -8,9 +8,10 @@ import (
 )
 
 type ServerConfig struct {
-	ListenAddress string
-	NodeUUID      uuid.UUID
-	Hostname      string
+	ListenAddress     string
+	NodeUUID          uuid.UUID
+	Hostname          string
+	KeepaliveInterval uint32
 }
 
 func NewServer(c ServerConfig) error {
@@ -22,7 +23,9 @@ func NewServer(c ServerConfig) error {
 }
 
 func StartTCPServer(c ServerConfig) error {
-	database := MetalBondDatabase{}
+	database := MetalBondDatabase{
+		KeepaliveInterval: c.KeepaliveInterval,
+	}
 
 	lis, err := net.Listen("tcp", c.ListenAddress)
 	if err != nil {
@@ -39,7 +42,8 @@ func StartTCPServer(c ServerConfig) error {
 		}
 
 		NewMetalBondPeer(
-			conn,
+			&conn,
+			conn.RemoteAddr().String(),
 			INCOMING,
 			&database,
 		)

@@ -4,39 +4,134 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/onmetal/metalbond/pb"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type MetalBondPeer struct {
-	PeerType          PeerType
-	conn              net.Conn
-	txChan            chan []byte
-	direction         ConnectionDirection
-	State             ConnectionState
-	database          *MetalBondDatabase
-	keepaliveInterval uint32
+	PeerType            PeerType
+	conn                net.Conn
+	remoteAddr          string
+	txChan              chan []byte
+	direction           ConnectionDirection
+	state               ConnectionState
+	stateLock           sync.RWMutex
+	database            *MetalBondDatabase
+	keepaliveInterval   uint32
+	keepaliveTimer      *time.Timer
+	mySubscriptions     map[uint32]bool
+	mySubscriptionsLock sync.Mutex
 }
 
 func NewMetalBondPeer(
-	conn net.Conn,
+	pconn *net.Conn,
+	remoteAddr string,
 	direction ConnectionDirection,
 	database *MetalBondDatabase) *MetalBondPeer {
 
+	// outgoing connections still need to be established. pconn is nil.
+	for pconn == nil {
+		conn, err := net.Dial("tcp", remoteAddr)
+		if err != nil {
+			retryInterval := time.Duration(5 * time.Second)
+			log.Warningf("Cannot connect to server - %v - retry in %v", err, retryInterval)
+			time.Sleep(retryInterval)
+			continue
+		}
+
+		pconn = &conn
+
+		log.WithField("peer", remoteAddr).Infof("Connected")
+	}
+
 	peer := MetalBondPeer{
-		conn:      conn,
-		direction: INCOMING,
-		State:     CONNECTING,
-		database:  database,
+		conn:       *pconn,
+		remoteAddr: remoteAddr,
+		direction:  direction,
+		state:      CONNECTING,
+		database:   database,
 	}
 
 	go peer.Handle()
 
 	return &peer
+}
+
+func (p *MetalBondPeer) GetState() ConnectionState {
+	p.stateLock.RLock()
+	state := p.state
+	p.stateLock.RUnlock()
+	return state
+}
+
+func (p *MetalBondPeer) setState(state ConnectionState) {
+	p.stateLock.Lock()
+	p.state = state
+	p.stateLock.Unlock()
+}
+
+func (p *MetalBondPeer) log() *logrus.Entry {
+	var state string
+	switch p.GetState() {
+	case HELLO_RECEIVED:
+		state = "HELLO_RECEIVED"
+	case HELLO_SENT:
+		state = "HELLO_SENT"
+	case ESTABLISHED:
+		state = "ESTABLISHED"
+	case RETRY:
+		state = "RETRY"
+	case CLOSED:
+		state = "CLOSED"
+	default:
+		state = "INVALID"
+	}
+
+	return log.WithField("peer", p.remoteAddr).WithField("state", state)
+}
+
+func (p *MetalBondPeer) Handle() {
+	p.txChan = make(chan []byte)
+	go p.rxLoop()
+	go p.txLoop()
+
+	if p.direction == OUTGOING {
+		helloMsg := pb.Hello{
+			NodeId:            p.database.NodeUUID[:],
+			Hostname:          p.database.Hostname,
+			IsReflector:       p.database.Reflector,
+			KeepaliveInterval: p.database.KeepaliveInterval,
+		}
+
+		p.sendMessage(HELLO, &helloMsg)
+		p.setState(HELLO_SENT)
+	}
+
+	p.log().Infof("Peer connected")
+}
+
+func (p *MetalBondPeer) Close() {
+	if p.GetState() == CLOSED {
+		p.log().Errorf("Connection Close() called twice.")
+		return
+	}
+
+	p.log().Infof("Closing peer connection")
+	p.setState(CLOSED)
+
+	p.txChan <- []byte{} // Sending zero length msg to txchan to indicate connection termination
+	// txLoop will close connection, rxLoop will notice that.
+
+	if p.direction == OUTGOING {
+		p.log().Infof("Trying to reconnect...")
+		NewMetalBondPeer(nil, p.remoteAddr, OUTGOING, p.database)
+	}
 }
 
 func (p *MetalBondPeer) txLoop() {
@@ -51,27 +146,46 @@ func (p *MetalBondPeer) txLoop() {
 
 		n, err := p.conn.Write(msg)
 		if n != len(msg) || err != nil {
-			log.Errorf("Could not transmit message completely: %v", err)
+			p.log().Errorf("Could not transmit message completely: %v", err)
 			p.Close()
 		}
 	}
 }
 
-func (p *MetalBondPeer) keepaliveTimer() {
-	for {
-		switch p.State {
-		case ESTABLISHED:
-			p.sendMessage(KEEPALIVE, nil)
-		case CLOSED:
-			return
+func (p *MetalBondPeer) startKeepaliveTimer() {
+	timeout := time.Duration(p.keepaliveInterval) * time.Second * 5 / 2
+	p.log().Infof("Timeout duration: %v", timeout)
+	p.keepaliveTimer = time.NewTimer(timeout)
+	go func() {
+		<-p.keepaliveTimer.C
+		if p.GetState() != CLOSED {
+			p.log().Infof("Connection timed out. Closing.")
+			p.Close()
 		}
+	}()
 
-		time.Sleep(time.Duration(p.keepaliveInterval) * time.Second)
+	if p.direction == OUTGOING {
+		interval := time.Duration(p.keepaliveInterval) * time.Second
+		p.log().Infof("Starting KEEPALIVE interval sender (%v)", interval)
+		for {
+			state := p.GetState()
+			switch state {
+			case HELLO_RECEIVED:
+				p.sendMessage(KEEPALIVE, nil)
+			case ESTABLISHED:
+				p.sendMessage(KEEPALIVE, nil)
+			default:
+				p.log().Debugf("Shutting down keepalive timer as peer is in wrong state (%v).", state)
+				return
+			}
+
+			time.Sleep(interval)
+		}
 	}
 }
 
 func (p *MetalBondPeer) resetKeepaliveTimeout() {
-	// TODO implement
+	p.keepaliveTimer.Reset(time.Duration(p.keepaliveInterval) * time.Second * 5 / 2)
 }
 
 func (p *MetalBondPeer) rxLoop() {
@@ -82,7 +196,7 @@ func (p *MetalBondPeer) rxLoop() {
 		bytesRead, err := p.conn.Read(buf)
 		if err != nil {
 			if err == io.EOF {
-				log.Debugf("Client has disconnected.")
+				p.log().Debugf("Client has disconnected.")
 				p.Close()
 				return
 			}
@@ -90,13 +204,16 @@ func (p *MetalBondPeer) rxLoop() {
 			p.Close()
 			return
 		}
+		if bytesRead >= len(buf) {
+			p.log().Warningf("too many messages in inbound queue. Closing connection.")
+			p.Close()
+		}
 
-		log.Debugf("Received %d bytes", bytesRead)
+		//p.log().Debugf("Received %d bytes", bytesRead)
 
 		pktStart := 0
 
 	parsePacket:
-		log.Debugf("pktStart: %v", pktStart)
 		pktVersion := buf[pktStart]
 		switch pktVersion {
 		case 1:
@@ -108,26 +225,63 @@ func (p *MetalBondPeer) rxLoop() {
 
 			switch pktType {
 			case HELLO:
-				log.Infof("HELLO message received")
 				hello := &pb.Hello{}
 				if err := proto.Unmarshal(pktBytes, hello); err != nil {
 					log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
 					return
 				}
 
+				// Use lower Keepalive interval of both client and server as peer config
 				keepaliveInterval := p.database.KeepaliveInterval
 				if hello.KeepaliveInterval < keepaliveInterval {
 					keepaliveInterval = hello.KeepaliveInterval
 				}
 				p.keepaliveInterval = keepaliveInterval
 
+				// state transition to HELLO_RECEIVED
+				p.setState(HELLO_RECEIVED)
+				p.log().Infof("HELLO message received")
+
+				// if direction incoming, send HELLO response
+				if p.direction == INCOMING {
+					helloMsg := pb.Hello{
+						NodeId:            p.database.NodeUUID[:],
+						Hostname:          p.database.Hostname,
+						IsReflector:       p.database.Reflector,
+						KeepaliveInterval: p.database.KeepaliveInterval,
+					}
+
+					p.sendMessage(HELLO, &helloMsg)
+					p.setState(HELLO_SENT)
+					p.log().Infof("HELLO message sent")
+				}
+
+				// start keepalive timer so keepalive messages are sent by the client
+				// and client and server check if regular keepalive messages are received.
+				go p.startKeepaliveTimer()
+
 			case KEEPALIVE:
-				log.Infof("KEEPALIVE message received")
+				p.log().Debugf("KEEPALIVE message received")
+
+				if p.direction == INCOMING && p.GetState() == HELLO_SENT {
+					p.setState(ESTABLISHED)
+				} else if p.direction == OUTGOING && p.GetState() == HELLO_RECEIVED {
+					p.setState(ESTABLISHED)
+				} else if p.GetState() == ESTABLISHED {
+					// all good
+				} else {
+					p.log().Errorf("Received KEEPALIVE while in wrong state. Closing connection.")
+					p.Close()
+				}
+
+				p.resetKeepaliveTimeout()
+
+				// The server must respond incoming KEEPALIVE messages with an own KEEPALIVE message.
 				if p.direction == INCOMING {
 					p.sendMessage(KEEPALIVE, nil)
 				}
-				p.resetKeepaliveTimeout()
 
+			// TODO: implement received SUBSCRIBE message
 			case SUBSCRIBE:
 				log.Infof("SUBSCRIBE message received")
 				msg := &pb.Subscription{}
@@ -137,8 +291,7 @@ func (p *MetalBondPeer) rxLoop() {
 				}
 				log.Infof("Content: %v", msg)
 
-				// TODO: Trigger route updates
-
+			// TODO: implement received UNSUBSCRIBE message
 			case UNSUBSCRIBE:
 				log.Infof("UNSUBSCRIBE message received")
 				msg := &pb.Subscription{}
@@ -148,6 +301,7 @@ func (p *MetalBondPeer) rxLoop() {
 				}
 				log.Infof("Content: %v", msg)
 
+			// TODO: implement received UPDATE message
 			case UPDATE:
 				log.Infof("UPDATE message received")
 				msg := &pb.Update{}
@@ -163,7 +317,7 @@ func (p *MetalBondPeer) rxLoop() {
 			}
 		default:
 			log.Errorf("Incompatible Client version. Closing connection.")
-			peer.Close()
+			p.Close()
 			return
 		}
 
@@ -174,6 +328,7 @@ func (p *MetalBondPeer) rxLoop() {
 }
 
 func (p *MetalBondPeer) sendMessage(msgType MESSAGE_TYPE, msg protoreflect.ProtoMessage) error {
+	//p.log().Debugf("Sending %v message...", msg.ProtoReflect().Type().Descriptor().Name())
 	msgBytes := []byte{}
 	var err error
 	if msg != nil {
@@ -191,26 +346,46 @@ func (p *MetalBondPeer) sendMessage(msgType MESSAGE_TYPE, msg protoreflect.Proto
 	return nil
 }
 
-func (p *MetalBondPeer) Handle() {
-	go p.rxLoop()
-	go p.txLoop()
-
-	helloMsg := pb.Hello{
-		NodeId:            p.database.NodeUUID[:],
-		Hostname:          p.database.Hostname,
-		IsReflector:       p.database.Reflector,
-		KeepaliveInterval: 5,
+func (p *MetalBondPeer) Subscribe(vni uint32) error {
+	if p.direction == INCOMING {
+		return fmt.Errorf("Cannot subscribe on incoming connection")
 	}
 
-	p.sendMessage(HELLO, &helloMsg)
+	p.mySubscriptionsLock.Lock()
+	defer p.mySubscriptionsLock.Unlock()
+	if _, exists := p.mySubscriptions[vni]; exists {
+		return fmt.Errorf("Already subscribed")
+	}
 
-	log := log.WithField("peer", p.conn.RemoteAddr())
-	log.Infof("Peer connected")
+	p.mySubscriptions[vni] = true
+
+	msg := pb.Subscription{
+		Action: pb.Action_ADD,
+		Vni:    vni,
+	}
+
+	return p.sendMessage(SUBSCRIBE, &msg)
 }
 
-func (p *MetalBondPeer) Close() {
-	log.Infof("Closing peer connection to %v", p.conn.RemoteAddr())
-	p.txChan <- []byte{} // Sending zero length msg to txchan to indicate connection termination
+func (p *MetalBondPeer) Unsubscribe(vni uint32) error {
+	if p.direction == INCOMING {
+		return fmt.Errorf("Cannot unsubscribe on incoming connection")
+	}
+
+	p.mySubscriptionsLock.Lock()
+	defer p.mySubscriptionsLock.Unlock()
+	if _, exists := p.mySubscriptions[vni]; !exists {
+		return fmt.Errorf("Not subscribed to table %d", vni)
+	}
+
+	delete(p.mySubscriptions, vni)
+
+	msg := pb.Subscription{
+		Action: pb.Action_REMOVE,
+		Vni:    vni,
+	}
+
+	return p.sendMessage(UNSUBSCRIBE, &msg)
 }
 
 func (p *MetalBondPeer) SendUpdate(r RouteUpdate) error {
