@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"os/signal"
 	"runtime"
 	"time"
 
@@ -43,12 +45,8 @@ func main() {
 			log.SetLevel(log.DebugLevel)
 		}
 
-		serverConfig := metalbond.ServerConfig{
-			ListenAddress:     CLI.Server.Listen,
-			KeepaliveInterval: CLI.Server.Keepalive,
-		}
-
-		metalbond.NewServer(serverConfig)
+		m := metalbond.NewMetalBond(CLI.Server.Keepalive)
+		m.StartServer(CLI.Server.Listen)
 
 	case "client":
 		log.Infof("Client")
@@ -58,12 +56,20 @@ func main() {
 			log.SetLevel(log.DebugLevel)
 		}
 
-		clientConfig := metalbond.ClientConfig{
-			Servers:           CLI.Client.Server,
-			KeepaliveInterval: CLI.Client.Keepalive,
-			Netlink:           CLI.Client.Netlink,
+		m := metalbond.NewMetalBond(CLI.Client.Keepalive)
+		if CLI.Client.Netlink {
+			if err := m.EnableNetlink(); err != nil {
+				log.Fatalf("Cannot enable netlink: %v", err)
+			}
 		}
-		metalbond.NewClient(clientConfig)
+		for _, server := range CLI.Client.Server {
+			m.AddPeer(server)
+		}
+
+		// Wait for SIGINTs
+		cint := make(chan os.Signal, 1)
+		signal.Notify(cint, os.Interrupt)
+		<-cint
 
 	default:
 		log.Errorf("Error: %v", ctx.Command())

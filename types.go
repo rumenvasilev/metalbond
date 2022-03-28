@@ -13,6 +13,7 @@ import (
 /////////////////////////////////////////////////////////////
 
 type VNI uint32
+
 type Destination struct {
 	IPVersion    IPVersion
 	Prefix       [16]byte
@@ -20,25 +21,11 @@ type Destination struct {
 }
 
 type NextHop struct {
-	TargetAddress [16]byte
-	TargetVNI     uint32
-
+	TargetAddress    net.IP
+	TargetVNI        uint32
 	NAT              bool
 	NATPortRangeFrom uint16
 	NATPortRangeTo   uint16
-}
-
-type Route struct {
-	Destination Destination
-	NextHops    []NextHop
-}
-
-type RouteUpdate struct {
-	Action       UpdateAction
-	VNI          VNI
-	Destination  Destination
-	NextHop      NextHop
-	ReceivedFrom *MetalBondPeer
 }
 
 /////////////////////////////////////////////////////////////
@@ -143,29 +130,15 @@ type msgUpdate struct {
 	message
 	Action      UpdateAction
 	VNI         uint32
-	Destination msgUpdateDestination
-	NextHop     msgUpdateNextHop
+	Destination Destination
+	NextHop     NextHop
 }
 
 func (msg msgUpdate) Serialize() ([]byte, error) {
 	return []byte{}, nil
 }
 
-type msgUpdateDestination struct {
-	IPVersion    IPVersion
-	Prefix       net.IP
-	PrefixLength uint8
-}
-
-type msgUpdateNextHop struct {
-	TargetAddress    net.IP
-	TargetVNI        uint32
-	NAT              bool
-	NATPortRangeFrom uint16
-	NATPortRangeTo   uint16
-}
-
-func DeserializeHelloMsg(pktBytes []byte) (*msgHello, error) {
+func deserializeHelloMsg(pktBytes []byte) (*msgHello, error) {
 	pbmsg := &pb.Hello{}
 	if err := proto.Unmarshal(pktBytes, pbmsg); err != nil {
 		return nil, fmt.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
@@ -176,7 +149,7 @@ func DeserializeHelloMsg(pktBytes []byte) (*msgHello, error) {
 	}, nil
 }
 
-func DeserializeSubscribeMsg(pktBytes []byte) (*msgSubscribe, error) {
+func deserializeSubscribeMsg(pktBytes []byte) (*msgSubscribe, error) {
 	pbmsg := &pb.Subscription{}
 	if err := proto.Unmarshal(pktBytes, pbmsg); err != nil {
 		return nil, fmt.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
@@ -187,7 +160,7 @@ func DeserializeSubscribeMsg(pktBytes []byte) (*msgSubscribe, error) {
 	}, nil
 }
 
-func DeserializeUnsubscribeMsg(pktBytes []byte) (*msgUnsubscribe, error) {
+func deserializeUnsubscribeMsg(pktBytes []byte) (*msgUnsubscribe, error) {
 	pbmsg := &pb.Subscription{}
 	if err := proto.Unmarshal(pktBytes, pbmsg); err != nil {
 		return nil, fmt.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
@@ -198,7 +171,7 @@ func DeserializeUnsubscribeMsg(pktBytes []byte) (*msgUnsubscribe, error) {
 	}, nil
 }
 
-func DeserializeUpdateMsg(pktBytes []byte) (*msgUpdate, error) {
+func deserializeUpdateMsg(pktBytes []byte) (*msgUpdate, error) {
 	pbmsg := &pb.Update{}
 	if err := proto.Unmarshal(pktBytes, pbmsg); err != nil {
 		return nil, fmt.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
@@ -214,13 +187,13 @@ func DeserializeUpdateMsg(pktBytes []byte) (*msgUpdate, error) {
 		ipversion = IPV4
 	}
 
-	destination := msgUpdateDestination{
+	destination := Destination{
 		IPVersion:    ipversion,
-		Prefix:       pbmsg.Destination.Prefix[:ipversion],
 		PrefixLength: uint8(pbmsg.Destination.PrefixLength),
 	}
+	copy(destination.Prefix[:], pbmsg.Destination.Prefix[:ipversion])
 
-	nexthop := msgUpdateNextHop{
+	nexthop := NextHop{
 		TargetAddress:    pbmsg.NextHop.TargetAddress[:ipversion],
 		TargetVNI:        pbmsg.NextHop.TargetVNI,
 		NAT:              pbmsg.NextHop.Nat,

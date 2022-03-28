@@ -117,9 +117,8 @@ func (p *MetalBondPeer) Unsubscribe(vni uint32) error {
 	return p.sendMessage(msg)
 }
 
-func (p *MetalBondPeer) SendUpdate(r RouteUpdate) error {
-	msg := []byte{}
-	p.txChan <- msg
+func (p *MetalBondPeer) SendUpdate(upd msgUpdate) error {
+	p.sendMessage(upd)
 	return nil
 }
 
@@ -236,7 +235,7 @@ func (p *MetalBondPeer) rxLoop() {
 
 			switch pktType {
 			case HELLO:
-				hello, err := DeserializeHelloMsg(pktBytes)
+				hello, err := deserializeHelloMsg(pktBytes)
 				if err != nil {
 					p.log().Errorf("Cannot deserialize HELLO message: %v", err)
 					p.Close()
@@ -249,7 +248,7 @@ func (p *MetalBondPeer) rxLoop() {
 				p.rxKeepalive <- msgKeepalive{}
 
 			case SUBSCRIBE:
-				sub, err := DeserializeSubscribeMsg(pktBytes)
+				sub, err := deserializeSubscribeMsg(pktBytes)
 				if err != nil {
 					p.log().Errorf("Cannot deserialize SUBSCRIBE message: %v", err)
 					p.Close()
@@ -259,7 +258,7 @@ func (p *MetalBondPeer) rxLoop() {
 				p.rxSubscribe <- *sub
 
 			case UNSUBSCRIBE:
-				sub, err := DeserializeUnsubscribeMsg(pktBytes)
+				sub, err := deserializeUnsubscribeMsg(pktBytes)
 				if err != nil {
 					p.log().Errorf("Cannot deserialize UNSUBSCRIBE message: %v", err)
 					p.Close()
@@ -269,7 +268,7 @@ func (p *MetalBondPeer) rxLoop() {
 				p.rxUnsubscribe <- *sub
 
 			case UPDATE:
-				upd, err := DeserializeUpdateMsg(pktBytes)
+				upd, err := deserializeUpdateMsg(pktBytes)
 				if err != nil {
 					p.log().Errorf("Cannot deserialize UPDATE message: %v", err)
 					p.Close()
