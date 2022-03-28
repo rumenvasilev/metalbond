@@ -14,15 +14,12 @@ enum Action {
 }
 
 message Hello {
-    bytes nodeId = 1;
-    string hostname = 2;
-    bool isReflector = 3;
-    uint32 keepaliveInterval = 4;
+    uint32 keepaliveInterval = 1;
+    bool isReflector = 2;
 }
 
 message Subscription {
-    Action action = 1;
-    uint32 vni = 2;
+    uint32 vni = 1;
 }
 
 message Update {

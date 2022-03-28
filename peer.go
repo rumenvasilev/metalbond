@@ -32,6 +32,7 @@ type MetalBondPeer struct {
 func NewMetalBondPeer(
 	pconn *net.Conn,
 	remoteAddr string,
+	keepaliveInterval uint32,
 	direction ConnectionDirection,
 	database *MetalBondDatabase) *MetalBondPeer {
 
@@ -51,11 +52,12 @@ func NewMetalBondPeer(
 	}
 
 	peer := MetalBondPeer{
-		conn:       *pconn,
-		remoteAddr: remoteAddr,
-		direction:  direction,
-		state:      CONNECTING,
-		database:   database,
+		conn:              *pconn,
+		remoteAddr:        remoteAddr,
+		direction:         direction,
+		state:             CONNECTING,
+		keepaliveInterval: keepaliveInterval,
+		database:          database,
 	}
 
 	go peer.Handle()
@@ -103,10 +105,8 @@ func (p *MetalBondPeer) Handle() {
 
 	if p.direction == OUTGOING {
 		helloMsg := pb.Hello{
-			NodeId:            p.database.NodeUUID[:],
-			Hostname:          p.database.Hostname,
-			IsReflector:       p.database.Reflector,
-			KeepaliveInterval: p.database.KeepaliveInterval,
+			//IsReflector:       p.database.Reflector,
+			KeepaliveInterval: p.keepaliveInterval,
 		}
 
 		p.sendMessage(HELLO, &helloMsg)
@@ -125,12 +125,16 @@ func (p *MetalBondPeer) Close() {
 	p.log().Infof("Closing peer connection")
 	p.setState(CLOSED)
 
-	p.txChan <- []byte{} // Sending zero length msg to txchan to indicate connection termination
+	// Sending zero length msg to txchan to indicate connection termination
 	// txLoop will close connection, rxLoop will notice that.
+	p.txChan <- []byte{}
 
+	// If the connection was OUTGOING, try to reconnect!
 	if p.direction == OUTGOING {
 		p.log().Infof("Trying to reconnect...")
-		NewMetalBondPeer(nil, p.remoteAddr, OUTGOING, p.database)
+
+		// TODO: Potential memory leak. This memory address is maintained nowhere. It's a zombie thread, doing stuff.
+		NewMetalBondPeer(nil, p.remoteAddr, p.keepaliveInterval, OUTGOING, p.database)
 	}
 }
 
@@ -232,7 +236,7 @@ func (p *MetalBondPeer) rxLoop() {
 				}
 
 				// Use lower Keepalive interval of both client and server as peer config
-				keepaliveInterval := p.database.KeepaliveInterval
+				keepaliveInterval := p.keepaliveInterval
 				if hello.KeepaliveInterval < keepaliveInterval {
 					keepaliveInterval = hello.KeepaliveInterval
 				}
@@ -245,10 +249,8 @@ func (p *MetalBondPeer) rxLoop() {
 				// if direction incoming, send HELLO response
 				if p.direction == INCOMING {
 					helloMsg := pb.Hello{
-						NodeId:            p.database.NodeUUID[:],
-						Hostname:          p.database.Hostname,
-						IsReflector:       p.database.Reflector,
-						KeepaliveInterval: p.database.KeepaliveInterval,
+						//IsReflector:       p.database.Reflector,
+						KeepaliveInterval: p.keepaliveInterval,
 					}
 
 					p.sendMessage(HELLO, &helloMsg)
@@ -360,8 +362,7 @@ func (p *MetalBondPeer) Subscribe(vni uint32) error {
 	p.mySubscriptions[vni] = true
 
 	msg := pb.Subscription{
-		Action: pb.Action_ADD,
-		Vni:    vni,
+		Vni: vni,
 	}
 
 	return p.sendMessage(SUBSCRIBE, &msg)
@@ -381,8 +382,7 @@ func (p *MetalBondPeer) Unsubscribe(vni uint32) error {
 	delete(p.mySubscriptions, vni)
 
 	msg := pb.Subscription{
-		Action: pb.Action_REMOVE,
-		Vni:    vni,
+		Vni: vni,
 	}
 
 	return p.sendMessage(UNSUBSCRIBE, &msg)

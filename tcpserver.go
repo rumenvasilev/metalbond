@@ -3,29 +3,18 @@ package metalbond
 import (
 	"net"
 
-	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
 type ServerConfig struct {
 	ListenAddress     string
-	NodeUUID          uuid.UUID
-	Hostname          string
 	KeepaliveInterval uint32
 }
 
 func NewServer(c ServerConfig) error {
 	log.Infof("starting server...")
 
-	StartTCPServer(c)
-
-	return nil
-}
-
-func StartTCPServer(c ServerConfig) error {
-	database := MetalBondDatabase{
-		KeepaliveInterval: c.KeepaliveInterval,
-	}
+	database := MetalBondDatabase{}
 
 	lis, err := net.Listen("tcp", c.ListenAddress)
 	if err != nil {
@@ -44,6 +33,7 @@ func StartTCPServer(c ServerConfig) error {
 		NewMetalBondPeer(
 			&conn,
 			conn.RemoteAddr().String(),
+			c.KeepaliveInterval,
 			INCOMING,
 			&database,
 		)

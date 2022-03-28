@@ -1,10 +1,8 @@
 package metalbond
 
 import (
-	"fmt"
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/onmetal/metalbond/pb"
 )
 
@@ -19,11 +17,7 @@ type RouteTable struct {
 }
 
 type MetalBondDatabase struct {
-	NodeUUID          uuid.UUID
-	Hostname          string
-	Reflector         bool
-	KeepaliveInterval uint32
-	KeepaliveTimeout  uint32
+	//Reflector         bool
 
 	routeTables      map[VNI]RouteTable
 	mtxSubscriptions sync.RWMutex                    // this locks a bit much (all VNIs). We could create a mutex for every VNI instead.
@@ -37,20 +31,17 @@ func (db *MetalBondDatabase) Update(r RouteUpdate) error {
 }
 
 func (db *MetalBondDatabase) ProcessProtoSubscribeMsg(msg pb.Subscription, receivedFrom *MetalBondPeer) error {
-	switch msg.Action {
-	case pb.Action_ADD:
-		db.mtxSubscriptions.Lock()
-		db.subscriptions[VNI(msg.GetVni())][receivedFrom] = true
-		db.mtxSubscriptions.Unlock()
+	db.mtxSubscriptions.Lock()
+	db.subscriptions[VNI(msg.GetVni())][receivedFrom] = true
+	db.mtxSubscriptions.Unlock()
 
-	case pb.Action_REMOVE:
-		db.mtxSubscriptions.Lock()
-		delete(db.subscriptions[VNI(msg.GetVni())], receivedFrom)
-		db.mtxSubscriptions.Unlock()
+	return nil
+}
 
-	default:
-		return fmt.Errorf("Invalid subscribe action!")
-	}
+func (db *MetalBondDatabase) ProcessProtoUnsubscribeMsg(msg pb.Subscription, receivedFrom *MetalBondPeer) error {
+	db.mtxSubscriptions.Lock()
+	delete(db.subscriptions[VNI(msg.GetVni())], receivedFrom)
+	db.mtxSubscriptions.Unlock()
 
 	return nil
 }
