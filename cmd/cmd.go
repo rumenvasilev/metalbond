@@ -34,7 +34,7 @@ func main() {
 	go func() {
 		for {
 			log.Debugf("Active Go Routines: %d", runtime.NumGoroutine())
-			time.Sleep(time.Duration(60 * time.Second))
+			time.Sleep(time.Duration(10 * time.Second))
 		}
 	}()
 
@@ -47,6 +47,13 @@ func main() {
 
 		m := metalbond.NewMetalBond(CLI.Server.Keepalive)
 		m.StartServer(CLI.Server.Listen)
+
+		// Wait for SIGINTs
+		cint := make(chan os.Signal, 1)
+		signal.Notify(cint, os.Interrupt)
+		<-cint
+
+		m.Shutdown()
 
 	case "client":
 		log.Infof("Client")
@@ -63,13 +70,15 @@ func main() {
 			}
 		}
 		for _, server := range CLI.Client.Server {
-			m.AddPeer(server)
+			m.AddPeer(server, metalbond.OUTGOING)
 		}
 
 		// Wait for SIGINTs
 		cint := make(chan os.Signal, 1)
 		signal.Notify(cint, os.Interrupt)
 		<-cint
+
+		m.Shutdown()
 
 	default:
 		log.Errorf("Error: %v", ctx.Command())
