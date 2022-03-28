@@ -9,13 +9,11 @@ import (
 
 	"github.com/onmetal/metalbond/pb"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type MetalBondPeer struct {
-	PeerType            PeerType
 	conn                net.Conn
 	remoteAddr          string
 	txChan              chan []byte
@@ -41,14 +39,14 @@ func NewMetalBondPeer(
 		conn, err := net.Dial("tcp", remoteAddr)
 		if err != nil {
 			retryInterval := time.Duration(5 * time.Second)
-			log.Warningf("Cannot connect to server - %v - retry in %v", err, retryInterval)
+			logrus.Warningf("Cannot connect to server - %v - retry in %v", err, retryInterval)
 			time.Sleep(retryInterval)
 			continue
 		}
 
 		pconn = &conn
 
-		log.WithField("peer", remoteAddr).Infof("Connected")
+		logrus.WithField("peer", remoteAddr).Infof("Connected")
 	}
 
 	peer := MetalBondPeer{
@@ -95,7 +93,7 @@ func (p *MetalBondPeer) log() *logrus.Entry {
 		state = "INVALID"
 	}
 
-	return log.WithField("peer", p.remoteAddr).WithField("state", state)
+	return logrus.WithField("peer", p.remoteAddr).WithField("state", state)
 }
 
 func (p *MetalBondPeer) Handle() {
@@ -105,7 +103,6 @@ func (p *MetalBondPeer) Handle() {
 
 	if p.direction == OUTGOING {
 		helloMsg := pb.Hello{
-			//IsReflector:       p.database.Reflector,
 			KeepaliveInterval: p.keepaliveInterval,
 		}
 
@@ -204,7 +201,7 @@ func (p *MetalBondPeer) rxLoop() {
 				p.Close()
 				return
 			}
-			log.Errorf("Error reading from socket: %v", err)
+			logrus.Errorf("Error reading from socket: %v", err)
 			p.Close()
 			return
 		}
@@ -231,7 +228,7 @@ func (p *MetalBondPeer) rxLoop() {
 			case HELLO:
 				hello := &pb.Hello{}
 				if err := proto.Unmarshal(pktBytes, hello); err != nil {
-					log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
+					p.log().Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
 					return
 				}
 
@@ -249,7 +246,6 @@ func (p *MetalBondPeer) rxLoop() {
 				// if direction incoming, send HELLO response
 				if p.direction == INCOMING {
 					helloMsg := pb.Hello{
-						//IsReflector:       p.database.Reflector,
 						KeepaliveInterval: p.keepaliveInterval,
 					}
 
@@ -285,40 +281,40 @@ func (p *MetalBondPeer) rxLoop() {
 
 			// TODO: implement received SUBSCRIBE message
 			case SUBSCRIBE:
-				log.Infof("SUBSCRIBE message received")
+				p.log().Infof("SUBSCRIBE message received")
 				msg := &pb.Subscription{}
 				if err := proto.Unmarshal(pktBytes, msg); err != nil {
-					log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
+					p.log().Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
 					return
 				}
-				log.Infof("Content: %v", msg)
+				p.log().Infof("Content: %v", msg)
 
 			// TODO: implement received UNSUBSCRIBE message
 			case UNSUBSCRIBE:
-				log.Infof("UNSUBSCRIBE message received")
+				p.log().Infof("UNSUBSCRIBE message received")
 				msg := &pb.Subscription{}
 				if err := proto.Unmarshal(pktBytes, msg); err != nil {
-					log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
+					p.log().Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
 					return
 				}
-				log.Infof("Content: %v", msg)
+				p.log().Infof("Content: %v", msg)
 
 			// TODO: implement received UPDATE message
 			case UPDATE:
-				log.Infof("UPDATE message received")
+				p.log().Infof("UPDATE message received")
 				msg := &pb.Update{}
 				if err := proto.Unmarshal(pktBytes, msg); err != nil {
-					log.Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
+					p.log().Errorf("Cannot unmarshal received packet. Closing connection: %v", err)
 					return
 				}
-				log.Infof("Content: %v", msg)
+				p.log().Infof("Content: %v", msg)
 
 			default:
-				log.Errorf("Unknown Packet received. Closing connection.")
+				p.log().Errorf("Unknown Packet received. Closing connection.")
 				return
 			}
 		default:
-			log.Errorf("Incompatible Client version. Closing connection.")
+			p.log().Errorf("Incompatible Client version. Closing connection.")
 			p.Close()
 			return
 		}
@@ -330,7 +326,6 @@ func (p *MetalBondPeer) rxLoop() {
 }
 
 func (p *MetalBondPeer) sendMessage(msgType MESSAGE_TYPE, msg protoreflect.ProtoMessage) error {
-	//p.log().Debugf("Sending %v message...", msg.ProtoReflect().Type().Descriptor().Name())
 	msgBytes := []byte{}
 	var err error
 	if msg != nil {
@@ -338,6 +333,10 @@ func (p *MetalBondPeer) sendMessage(msgType MESSAGE_TYPE, msg protoreflect.Proto
 		if err != nil {
 			return fmt.Errorf("Could not marshal message: %v", err)
 		}
+	}
+
+	if len(msgBytes) > 1188 {
+		return fmt.Errorf("Message too long: %d bytes > maximum of 1188 bytes", len(msgBytes))
 	}
 
 	hdr := []byte{1, byte(len(msgBytes) >> 8), byte(len(msgBytes) % 256), byte(msgType)}

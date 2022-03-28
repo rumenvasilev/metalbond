@@ -15,7 +15,6 @@ enum Action {
 
 message Hello {
     uint32 keepaliveInterval = 1;
-    bool isReflector = 2;
 }
 
 message Subscription {

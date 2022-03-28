@@ -17,8 +17,6 @@ type RouteTable struct {
 }
 
 type MetalBondDatabase struct {
-	//Reflector         bool
-
 	routeTables      map[VNI]RouteTable
 	mtxSubscriptions sync.RWMutex                    // this locks a bit much (all VNIs). We could create a mutex for every VNI instead.
 	subscriptions    map[VNI]map[*MetalBondPeer]bool // HashMap of HashSet

@@ -78,10 +78,3 @@ const (
 	ADD UpdateAction = iota
 	REMOVE
 )
-
-type PeerType uint8
-
-const (
-	CLIENT PeerType = iota
-	REFLECTOR
-)
