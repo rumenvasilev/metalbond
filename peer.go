@@ -160,7 +160,7 @@ func (p *MetalBondPeer) handle() {
 		conn, err := net.Dial("tcp", p.remoteAddr)
 		if err != nil {
 			retryInterval := time.Duration(5 * time.Second)
-			logrus.Warningf("Cannot connect to server - %v - retry in %v", err, retryInterval)
+			logrus.Infof("Cannot connect to server - %v - retry in %v", err, retryInterval)
 			time.Sleep(retryInterval)
 			continue
 		}
@@ -187,7 +187,7 @@ func (p *MetalBondPeer) handle() {
 			p.processRxHello(msg)
 
 		case msg := <-p.rxKeepalive:
-			p.log().Debugf("Received KEEPALIVE message")
+			p.log().Tracef("Received KEEPALIVE message")
 			p.processRxKeepalive(msg)
 
 		case msg := <-p.rxSubscribe:
@@ -216,9 +216,12 @@ func (p *MetalBondPeer) rxLoop() {
 	for {
 		// TODO: read full packets!!!!
 		bytesRead, err := (*p.conn).Read(buf)
+		if p.GetState() == CLOSED || p.GetState() == RETRY {
+			return
+		}
 		if err != nil {
 			if err == io.EOF {
-				p.log().Debugf("Client has disconnected.")
+				p.log().Infof("Connection closed by peer")
 				go p.Reset()
 				return
 			}
@@ -332,8 +335,10 @@ func (p *MetalBondPeer) processRxHello(msg msgHello) {
 func (p *MetalBondPeer) processRxKeepalive(msg msgKeepalive) {
 	if p.direction == INCOMING && p.GetState() == HELLO_SENT {
 		p.setState(ESTABLISHED)
+		p.log().Infof("Connection established")
 	} else if p.direction == OUTGOING && p.GetState() == HELLO_RECEIVED {
 		p.setState(ESTABLISHED)
+		p.log().Infof("Connection established")
 	} else if p.GetState() == ESTABLISHED {
 		// all good
 	} else {
@@ -369,6 +374,10 @@ func (p *MetalBondPeer) Close() {
 }
 
 func (p *MetalBondPeer) Reset() {
+	if p.GetState() == CLOSED {
+		return
+	}
+
 	switch p.direction {
 	case INCOMING:
 		p.metalbond.RemovePeer(p.remoteAddr)
@@ -440,7 +449,7 @@ func (p *MetalBondPeer) sendMessage(msg message) error {
 		p.log().Debugf("Sending HELLO message")
 	case msgKeepalive:
 		msgType = KEEPALIVE
-		p.log().Debugf("Sending KEEPALIVE message")
+		p.log().Tracef("Sending KEEPALIVE message")
 	case msgSubscribe:
 		msgType = SUBSCRIBE
 		p.log().Debugf("Sending SUBSCRIBE message")

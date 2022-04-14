@@ -19,7 +19,11 @@ type MetalBond struct {
 	subscriptions    map[VNI]map[*MetalBondPeer]bool // HashMap of HashSet
 
 	peers             map[string]*MetalBondPeer
+	peerMtx           sync.Mutex
 	keepaliveInterval uint32
+	shuttingDown      bool
+
+	lis *net.Listener
 }
 
 func NewMetalBond(keepaliveInterval uint32) *MetalBond {
@@ -32,6 +36,9 @@ func NewMetalBond(keepaliveInterval uint32) *MetalBond {
 }
 
 func (m *MetalBond) AddPeer(addr string, direction ConnectionDirection) error {
+	m.peerMtx.Lock()
+	defer m.peerMtx.Unlock()
+
 	m.log().Infof("Adding peer %s", addr)
 	if _, exists := m.peers[addr]; exists {
 		return fmt.Errorf("Peer already registered")
@@ -48,6 +55,9 @@ func (m *MetalBond) AddPeer(addr string, direction ConnectionDirection) error {
 }
 
 func (m *MetalBond) RemovePeer(addr string) error {
+	m.peerMtx.Lock()
+	defer m.peerMtx.Unlock()
+
 	m.log().Infof("Removing peer %s", addr)
 	if _, exists := m.peers[addr]; !exists {
 		m.log().Errorf("Peer %s does not exist", addr)
@@ -62,6 +72,7 @@ func (m *MetalBond) RemovePeer(addr string) error {
 
 func (m *MetalBond) StartServer(listenAddress string) error {
 	lis, err := net.Listen("tcp", listenAddress)
+	m.lis = &lis
 	if err != nil {
 		return fmt.Errorf("Cannot open TCP port: %v", err)
 	}
@@ -71,8 +82,11 @@ func (m *MetalBond) StartServer(listenAddress string) error {
 	go func() {
 		for {
 			conn, err := lis.Accept()
-			if err != nil {
+			if m.shuttingDown {
+				return
+			} else if err != nil {
 				m.log().Errorf("Error accepting incoming connection: %v", err)
+				return
 			}
 
 			m.peers[conn.RemoteAddr().String()] = NewMetalBondPeer(
@@ -89,7 +103,17 @@ func (m *MetalBond) StartServer(listenAddress string) error {
 }
 
 func (m *MetalBond) Shutdown() {
+	m.log().Infof("Shutting down MetalBond...")
+	m.shuttingDown = true
+	if m.lis != nil {
+		(*m.lis).Close()
+	}
 
+	for p := range m.peers {
+		m.RemovePeer(p)
+	}
+
+	//time.Sleep(2 * time.Second)
 }
 
 func (m *MetalBond) EnableNetlink() error {
