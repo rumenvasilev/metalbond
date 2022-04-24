@@ -27,7 +27,7 @@ var CLI struct {
 		Announce      []string `help:"Announce Prefixes in VNIs (e.g. 23#2001:db8:cafe::/64#2001:db8::cafe)"`
 		Verbose       bool     `help:"Enable debug logging" short:"v"`
 		InstallRoutes bool     `help:"install routes via netlink"`
-		Link          string   `help:"ip6tnl link name"`
+		Tun           string   `help:"ip6tnl tun device name"`
 		RouteTable    int      `help:"install routes into a specified table (e.g. when routes should be installed into a VRF)"`
 		Keepalive     uint32   `help:"Keepalive Interval"`
 	} `cmd:"" help:"Run MetalBond Client"`
@@ -70,7 +70,7 @@ func main() {
 
 		m := metalbond.NewMetalBond(CLI.Client.Keepalive)
 		if CLI.Client.InstallRoutes {
-			if err := m.EnableNetlink(CLI.Client.Link, CLI.Client.RouteTable); err != nil {
+			if err := m.EnableNetlink(CLI.Client.Tun, CLI.Client.RouteTable); err != nil {
 				log.Fatalf("Cannot enable netlink: %v", err)
 			}
 		}
