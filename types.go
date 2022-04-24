@@ -19,12 +19,24 @@ type Destination struct {
 	Prefix    netaddr.IPPrefix
 }
 
+func (d Destination) String() string {
+	return d.Prefix.String()
+}
+
 type NextHop struct {
 	TargetAddress    netaddr.IP
 	TargetVNI        uint32
 	NAT              bool
 	NATPortRangeFrom uint16
 	NATPortRangeTo   uint16
+}
+
+func (h NextHop) String() string {
+	if h.TargetVNI != 0 {
+		return fmt.Sprintf("%s (VNI: %d)", h.TargetAddress.String(), h.TargetVNI)
+	} else {
+		return h.TargetAddress.String()
+	}
 }
 
 /////////////////////////////////////////////////////////////

@@ -76,6 +76,7 @@ func (m *MetalBond) RemovePeer(addr string) error {
 }
 
 func (m *MetalBond) AnnounceRoute(vni uint, dest Destination, hop NextHop) error {
+	m.log().Infof("Announcing VNI %d: %s via %s", vni, dest, hop)
 	return nil
 }
 
