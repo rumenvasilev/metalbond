@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 )
 
 type RouteTable struct {
@@ -22,6 +23,10 @@ type MetalBond struct {
 	peerMtx           sync.Mutex
 	keepaliveInterval uint32
 	shuttingDown      bool
+
+	installRoutes      bool
+	tunDevice          netlink.Link
+	kernelRouteTableID int
 
 	lis *net.Listener
 }
@@ -116,7 +121,18 @@ func (m *MetalBond) Shutdown() {
 	//time.Sleep(2 * time.Second)
 }
 
-func (m *MetalBond) EnableNetlink() error {
+func (m *MetalBond) EnableNetlink(linkName string, routeTable int) error {
+	link, err := netlink.LinkByName(linkName)
+	if err != nil {
+		return fmt.Errorf("Cannot get link '%s': %v", linkName, err)
+	}
+
+	m.installRoutes = true
+	m.tunDevice = link
+	m.kernelRouteTableID = routeTable
+
+	m.log().Infof("Enabled installing routes into route table %d via %s", m.kernelRouteTableID, m.tunDevice.Attrs().Name)
+
 	return nil
 }
 

@@ -8,7 +8,9 @@ run-server: all
 		--keepalive 10
 
 run-client1: all
-	cd target && ./metalbond client -v \
+	cd target && sudo ./metalbond client -v \
+		--install-routes \
+		--link ip6tnl0 \
 		--server [::1]:4711 \
 		--keepalive 5 \
 		--subscribe 23 \
