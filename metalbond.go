@@ -75,6 +75,10 @@ func (m *MetalBond) RemovePeer(addr string) error {
 	return nil
 }
 
+func (m *MetalBond) AnnounceRoute(vni uint, dest Destination, hop NextHop) error {
+	return nil
+}
+
 func (m *MetalBond) StartServer(listenAddress string) error {
 	lis, err := net.Listen("tcp", listenAddress)
 	m.lis = &lis

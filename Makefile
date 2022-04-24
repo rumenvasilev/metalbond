@@ -14,8 +14,8 @@ run-client1: all
 		--server [::1]:4711 \
 		--keepalive 5 \
 		--subscribe 23 \
-		--announce 23#2001:db8:1::/48 \
-		--announce 23#192.168.0.0/16
+		--announce 23#2001:db8:1::/48#2001:db8::cafe \
+		--announce 23#192.168.0.0/16#2001:db8::cafe
 
 run-client2: all
 	cd target && ./metalbond client -v \

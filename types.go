@@ -2,10 +2,10 @@ package metalbond
 
 import (
 	"fmt"
-	"net"
 
 	"github.com/onmetal/metalbond/pb"
 	"google.golang.org/protobuf/proto"
+	"inet.af/netaddr"
 )
 
 /////////////////////////////////////////////////////////////
@@ -15,13 +15,12 @@ import (
 type VNI uint32
 
 type Destination struct {
-	IPVersion    IPVersion
-	Prefix       [16]byte
-	PrefixLength uint8
+	IPVersion IPVersion
+	Prefix    netaddr.IPPrefix
 }
 
 type NextHop struct {
-	TargetAddress    net.IP
+	TargetAddress    netaddr.IP
 	TargetVNI        uint32
 	NAT              bool
 	NATPortRangeFrom uint16
@@ -187,14 +186,21 @@ func deserializeUpdateMsg(pktBytes []byte) (*msgUpdate, error) {
 		ipversion = IPV4
 	}
 
-	destination := Destination{
-		IPVersion:    ipversion,
-		PrefixLength: uint8(pbmsg.Destination.PrefixLength),
+	destIP, ok := netaddr.FromStdIP(pbmsg.Destination.Prefix)
+	if !ok {
+		return nil, fmt.Errorf("Invalid destination IP")
 	}
-	copy(destination.Prefix[:], pbmsg.Destination.Prefix[:ipversion])
+	destination := Destination{
+		IPVersion: ipversion,
+		Prefix:    netaddr.IPPrefixFrom(destIP, uint8(pbmsg.Destination.PrefixLength)),
+	}
 
+	nhAddr, ok := netaddr.FromStdIP(pbmsg.NextHop.TargetAddress)
+	if !ok {
+		return nil, fmt.Errorf("Invalid nexthop IP")
+	}
 	nexthop := NextHop{
-		TargetAddress:    pbmsg.NextHop.TargetAddress[:ipversion],
+		TargetAddress:    nhAddr,
 		TargetVNI:        pbmsg.NextHop.TargetVNI,
 		NAT:              pbmsg.NextHop.Nat,
 		NATPortRangeFrom: uint16(pbmsg.NextHop.NatPortRangeFrom),

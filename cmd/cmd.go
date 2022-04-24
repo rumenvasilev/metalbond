@@ -4,11 +4,14 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alecthomas/kong"
 	"github.com/onmetal/metalbond"
 	log "github.com/sirupsen/logrus"
+	"inet.af/netaddr"
 )
 
 var CLI struct {
@@ -21,7 +24,7 @@ var CLI struct {
 	Client struct {
 		Server        []string `help:"Server address. You may define multiple servers."`
 		Subscribe     []uint32 `help:"Subscribe to VNIs"`
-		Announce      []string `help:"Announce Prefixes in VNIs (e.g. 23#2001:db8::/64)"`
+		Announce      []string `help:"Announce Prefixes in VNIs (e.g. 23#2001:db8:cafe::/64#2001:db8::cafe)"`
 		Verbose       bool     `help:"Enable debug logging" short:"v"`
 		InstallRoutes bool     `help:"install routes via netlink"`
 		Link          string   `help:"ip6tnl link name"`
@@ -73,6 +76,48 @@ func main() {
 		}
 		for _, server := range CLI.Client.Server {
 			m.AddPeer(server, metalbond.OUTGOING)
+		}
+
+		for _, announcement := range CLI.Client.Announce {
+			parts := strings.Split(announcement, "#")
+			if len(parts) != 3 {
+				log.Fatalf("malformed announcement: %s", announcement)
+			}
+
+			vni, err := strconv.ParseInt(parts[0], 10, 24)
+			if len(parts) != 3 {
+				log.Fatalf("invalid VNI: %s", parts[0])
+			}
+
+			prefix, err := netaddr.ParseIPPrefix(parts[1])
+			if err != nil {
+				log.Fatalf("invalid prefix: %s", parts[1])
+			}
+
+			var ipversion metalbond.IPVersion
+			if prefix.IP().Is4() {
+				ipversion = metalbond.IPV4
+			} else {
+				ipversion = metalbond.IPV6
+			}
+
+			dest := metalbond.Destination{
+				IPVersion: ipversion,
+				Prefix:    prefix,
+			}
+
+			hopIP, err := netaddr.ParseIP(parts[2])
+			if err != nil {
+				log.Fatalf("invalid nexthop address: %s - %v", parts[2], err)
+			}
+
+			hop := metalbond.NextHop{
+				TargetAddress: hopIP,
+				TargetVNI:     0,
+				NAT:           false,
+			}
+
+			m.AnnounceRoute(uint(vni), dest, hop)
 		}
 
 		// Wait for SIGINTs
