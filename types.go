@@ -3,9 +3,10 @@ package metalbond
 import (
 	"fmt"
 
+	"net/netip"
+
 	"github.com/onmetal/metalbond/pb"
 	"google.golang.org/protobuf/proto"
-	"inet.af/netaddr"
 )
 
 /////////////////////////////////////////////////////////////
@@ -16,7 +17,7 @@ type VNI uint32
 
 type Destination struct {
 	IPVersion IPVersion
-	Prefix    netaddr.IPPrefix
+	Prefix    netip.Prefix
 }
 
 func (d Destination) String() string {
@@ -24,7 +25,7 @@ func (d Destination) String() string {
 }
 
 type NextHop struct {
-	TargetAddress    netaddr.IP
+	TargetAddress    netip.Addr
 	TargetVNI        uint32
 	NAT              bool
 	NATPortRangeFrom uint16
@@ -198,16 +199,16 @@ func deserializeUpdateMsg(pktBytes []byte) (*msgUpdate, error) {
 		ipversion = IPV4
 	}
 
-	destIP, ok := netaddr.FromStdIP(pbmsg.Destination.Prefix)
+	destIP, ok := netip.AddrFromSlice(pbmsg.Destination.Prefix)
 	if !ok {
 		return nil, fmt.Errorf("Invalid destination IP")
 	}
 	destination := Destination{
 		IPVersion: ipversion,
-		Prefix:    netaddr.IPPrefixFrom(destIP, uint8(pbmsg.Destination.PrefixLength)),
+		Prefix:    netip.PrefixFrom(destIP, int(pbmsg.Destination.PrefixLength)),
 	}
 
-	nhAddr, ok := netaddr.FromStdIP(pbmsg.NextHop.TargetAddress)
+	nhAddr, ok := netip.AddrFromSlice(pbmsg.NextHop.TargetAddress)
 	if !ok {
 		return nil, fmt.Errorf("Invalid nexthop IP")
 	}

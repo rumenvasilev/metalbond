@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"net/netip"
+
 	"github.com/alecthomas/kong"
 	"github.com/onmetal/metalbond"
 	log "github.com/sirupsen/logrus"
-	"inet.af/netaddr"
 )
 
 var CLI struct {
@@ -89,13 +90,13 @@ func main() {
 				log.Fatalf("invalid VNI: %s", parts[0])
 			}
 
-			prefix, err := netaddr.ParseIPPrefix(parts[1])
+			prefix, err := netip.ParsePrefix(parts[1])
 			if err != nil {
 				log.Fatalf("invalid prefix: %s", parts[1])
 			}
 
 			var ipversion metalbond.IPVersion
-			if prefix.IP().Is4() {
+			if prefix.Addr().Is4() {
 				ipversion = metalbond.IPV4
 			} else {
 				ipversion = metalbond.IPV6
@@ -106,7 +107,7 @@ func main() {
 				Prefix:    prefix,
 			}
 
-			hopIP, err := netaddr.ParseIP(parts[2])
+			hopIP, err := netip.ParseAddr(parts[2])
 			if err != nil {
 				log.Fatalf("invalid nexthop address: %s - %v", parts[2], err)
 			}
