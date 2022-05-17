@@ -15,6 +15,7 @@ enum Action {
 
 message Hello {
     uint32 keepaliveInterval = 1;
+    bool isServer = 2;
 }
 
 message Subscription {

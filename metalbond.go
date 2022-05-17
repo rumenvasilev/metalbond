@@ -33,7 +33,8 @@ type MetalBond struct {
 	tunDevice          netlink.Link
 	kernelRouteTableID int
 
-	lis *net.Listener // for server only
+	lis      *net.Listener // for server only
+	isServer bool
 }
 
 func NewMetalBond(keepaliveInterval uint32) *MetalBond {
@@ -102,7 +103,32 @@ func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error 
 	m.peerMtx.RLock()
 	defer m.peerMtx.RUnlock()
 
-	for _, p := range m.peers {
+	err := m.distributeRouteToPeers(nil, vni, dest, hop)
+	if err != nil {
+		m.log().Errorf("Could not distribute route to peers: %v", err)
+	}
+
+	return nil
+}
+
+func (m *MetalBond) distributeRouteToPeers(fromPeer *MetalBondPeer, vni VNI, dest Destination, hop NextHop) error {
+	m.mtxSubscriptions.RLock()
+	defer m.mtxSubscriptions.RUnlock()
+	if _, exists := m.subscriptions[vni]; !exists {
+		return nil
+	}
+
+	for p := range m.subscriptions[vni] {
+		if p == fromPeer {
+			m.log().Debugf("Received the route from this peer. Skipping redistribution.")
+			continue
+		}
+
+		if m.isServer && p.isServer {
+			m.log().Debugf("Do not redistribute route received from another server. Skipping redistribution.")
+			continue
+		}
+
 		upd := msgUpdate{
 			VNI:         vni,
 			Destination: dest,
@@ -118,7 +144,7 @@ func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error 
 	return nil
 }
 
-func (m *MetalBond) GetOwnAnnouncements() []RouteTable {
+func (m *MetalBond) getMyAnnouncements() []RouteTable {
 	t := []RouteTable{}
 	m.mtxMyAnnouncements.RLock()
 	defer m.mtxMyAnnouncements.RUnlock()
@@ -130,12 +156,35 @@ func (m *MetalBond) GetOwnAnnouncements() []RouteTable {
 	return t
 }
 
+func (m *MetalBond) addReceivedRoute(fromPeer *MetalBondPeer, vni VNI, dest Destination, hop NextHop) error {
+	m.mtxRouteTables.Lock()
+
+	if _, exists := m.routeTables[vni]; !exists {
+		m.routeTables[vni] = RouteTable{
+			VNI:    vni,
+			Routes: make(map[Destination][]NextHop),
+		}
+	}
+
+	if _, exists := m.routeTables[vni].Routes[dest]; !exists {
+		m.routeTables[vni].Routes[dest] = []NextHop{hop}
+	}
+	m.mtxRouteTables.Unlock()
+
+	m.log().Infof("Received Route: VNI %d, Prefix: %s, NextHop: %s", vni, dest, hop)
+
+	m.distributeRouteToPeers(fromPeer, vni, dest, hop)
+
+	return nil
+}
+
 func (m *MetalBond) StartServer(listenAddress string) error {
 	lis, err := net.Listen("tcp", listenAddress)
 	m.lis = &lis
 	if err != nil {
 		return fmt.Errorf("Cannot open TCP port: %v", err)
 	}
+	m.isServer = true
 
 	m.log().Infof("Listening on %s", listenAddress)
 

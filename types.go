@@ -93,11 +93,13 @@ type message interface {
 type msgHello struct {
 	message
 	KeepaliveInterval uint32
+	IsServer          bool
 }
 
 func (m msgHello) Serialize() ([]byte, error) {
 	pbmsg := pb.Hello{
 		KeepaliveInterval: m.KeepaliveInterval,
+		IsServer:          m.IsServer,
 	}
 
 	msgBytes, err := proto.Marshal(&pbmsg)

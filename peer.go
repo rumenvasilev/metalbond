@@ -14,6 +14,7 @@ type MetalBondPeer struct {
 	conn       *net.Conn
 	remoteAddr string
 	direction  ConnectionDirection
+	isServer   bool
 
 	state     ConnectionState
 	stateLock sync.RWMutex
@@ -124,7 +125,7 @@ func (p *MetalBondPeer) setState(state ConnectionState) {
 	p.stateLock.Unlock()
 
 	if state == ESTABLISHED {
-		for _, rt := range p.metalbond.GetOwnAnnouncements() {
+		for _, rt := range p.metalbond.getMyAnnouncements() {
 			for dest, hops := range rt.Routes {
 				for _, hop := range hops {
 
@@ -332,6 +333,7 @@ func (p *MetalBondPeer) rxLoop() {
 
 func (p *MetalBondPeer) processRxHello(msg msgHello) {
 	// Use lower Keepalive interval of both client and server as peer config
+	p.isServer = msg.IsServer
 	keepaliveInterval := p.keepaliveInterval
 	if msg.KeepaliveInterval < keepaliveInterval {
 		keepaliveInterval = msg.KeepaliveInterval
@@ -348,6 +350,7 @@ func (p *MetalBondPeer) processRxHello(msg msgHello) {
 	if p.direction == INCOMING {
 		helloMsg := msgHello{
 			KeepaliveInterval: p.keepaliveInterval,
+			IsServer:          p.metalbond.isServer,
 		}
 
 		p.sendMessage(helloMsg)
@@ -386,6 +389,17 @@ func (p *MetalBondPeer) processRxUnsubscribe(msg msgUnsubscribe) {
 }
 
 func (p *MetalBondPeer) processRxUpdate(msg msgUpdate) {
+	switch msg.Action {
+	case ADD:
+		err := p.metalbond.addReceivedRoute(p, msg.VNI, msg.Destination, msg.NextHop)
+		if err != nil {
+			p.log().Errorf("Could not process received route UPDATE: %v", err)
+		}
+	case REMOVE:
+		p.log().Errorf("TODO: Implement UPDATE REMOVE!")
+	default:
+		p.log().Errorf("Received UPDATE message with invalid action type!")
+	}
 }
 
 func (p *MetalBondPeer) Close() {
