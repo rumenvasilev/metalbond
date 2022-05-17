@@ -106,6 +106,10 @@ func (p *MetalBondPeer) Unsubscribe(vni uint32) error {
 }
 
 func (p *MetalBondPeer) SendUpdate(upd msgUpdate) error {
+	if p.GetState() != ESTABLISHED {
+		return fmt.Errorf("Connection not ESTABLISHED")
+	}
+
 	p.sendMessage(upd)
 	return nil
 }
@@ -118,6 +122,26 @@ func (p *MetalBondPeer) setState(state ConnectionState) {
 	p.stateLock.Lock()
 	p.state = state
 	p.stateLock.Unlock()
+
+	if state == ESTABLISHED {
+		for _, rt := range p.metalbond.GetOwnAnnouncements() {
+			for dest, hops := range rt.Routes {
+				for _, hop := range hops {
+
+					upd := msgUpdate{
+						VNI:         rt.VNI,
+						Destination: dest,
+						NextHop:     hop,
+					}
+
+					err := p.SendUpdate(upd)
+					if err != nil {
+						p.log().Debugf("Could not send update to peer: %v", err)
+					}
+				}
+			}
+		}
+	}
 }
 
 func (p *MetalBondPeer) log() *logrus.Entry {
@@ -334,11 +358,11 @@ func (p *MetalBondPeer) processRxHello(msg msgHello) {
 
 func (p *MetalBondPeer) processRxKeepalive(msg msgKeepalive) {
 	if p.direction == INCOMING && p.GetState() == HELLO_SENT {
-		p.setState(ESTABLISHED)
 		p.log().Infof("Connection established")
+		p.setState(ESTABLISHED)
 	} else if p.direction == OUTGOING && p.GetState() == HELLO_RECEIVED {
-		p.setState(ESTABLISHED)
 		p.log().Infof("Connection established")
+		p.setState(ESTABLISHED)
 	} else if p.GetState() == ESTABLISHED {
 		// all good
 	} else {

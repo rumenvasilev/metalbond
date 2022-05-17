@@ -175,7 +175,10 @@ func (msg msgUpdate) Serialize() ([]byte, error) {
 	pbmsg.NextHop.TargetVNI = msg.NextHop.TargetVNI
 	pbmsg.NextHop.TargetAddress = msg.NextHop.TargetAddress.AsSlice()
 
-	// TODO: Add NAT and LB Stuff
+	if msg.NextHop.NAT {
+		// TODO: Add NAT and LB Stuff
+		return nil, fmt.Errorf("NAT Update msg NOT IMPLEMENTED")
+	}
 
 	msgBytes, err := proto.Marshal(&pbmsg)
 	if err != nil {

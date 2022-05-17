@@ -99,21 +99,35 @@ func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error 
 	}
 	m.mtxMyAnnouncements.Unlock()
 
-	m.peerMtx.Lock()
-	defer m.peerMtx.Unlock()
+	m.peerMtx.RLock()
+	defer m.peerMtx.RUnlock()
 
 	for _, p := range m.peers {
-		if p.GetState() == ESTABLISHED {
-			upd := msgUpdate{
-				VNI:         vni,
-				Destination: dest,
-				NextHop:     hop,
-			}
-			p.SendUpdate(upd)
+		upd := msgUpdate{
+			VNI:         vni,
+			Destination: dest,
+			NextHop:     hop,
+		}
+
+		err := p.SendUpdate(upd)
+		if err != nil {
+			m.log().Debugf("Could not send update to peer: %v", err)
 		}
 	}
 
 	return nil
+}
+
+func (m *MetalBond) GetOwnAnnouncements() []RouteTable {
+	t := []RouteTable{}
+	m.mtxMyAnnouncements.RLock()
+	defer m.mtxMyAnnouncements.RUnlock()
+
+	for _, x := range m.myAnnouncements {
+		t = append(t, x)
+	}
+
+	return t
 }
 
 func (m *MetalBond) StartServer(listenAddress string) error {
