@@ -23,8 +23,8 @@ run-client2: all
 		--keepalive 5 \
 		--subscribe 23 \
 		--subscribe 42 \
-		--announce 23#2001:db8:2::/48#2001:db8::cafe \
-		--announce 42#10.0.0.0/8#2001:db8::cafe
+		--announce 23#2001:db8:2::/48#2001:db8::beef \
+		--announce 42#10.0.0.0/8#2001:db8::beef
 
 .PHONY: proto
 proto:

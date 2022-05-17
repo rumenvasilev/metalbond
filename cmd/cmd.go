@@ -79,6 +79,13 @@ func main() {
 			m.AddPeer(server, metalbond.OUTGOING)
 		}
 
+		for _, subscription := range CLI.Client.Subscribe {
+			err := m.Subscribe(metalbond.VNI(subscription))
+			if err != nil {
+				log.Fatalf("Subscription failed: %v", err)
+			}
+		}
+
 		for _, announcement := range CLI.Client.Announce {
 			parts := strings.Split(announcement, "#")
 			if len(parts) != 3 {

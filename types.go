@@ -60,6 +60,25 @@ const (
 
 type ConnectionState uint8
 
+func (cs ConnectionState) String() string {
+	switch cs {
+	case CONNECTING:
+		return "CONNECTING"
+	case HELLO_SENT:
+		return "HELLO_SENT"
+	case HELLO_RECEIVED:
+		return "HELLO_RECEIVED"
+	case ESTABLISHED:
+		return "ESTABLISHED"
+	case RETRY:
+		return "RETRY"
+	case CLOSED:
+		return "CLOSED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 const (
 	CONNECTING ConnectionState = iota
 	HELLO_SENT
@@ -124,20 +143,33 @@ func (msg msgKeepalive) Serialize() ([]byte, error) {
 
 type msgSubscribe struct {
 	message
-	VNI uint32
+	VNI VNI
 }
 
 func (msg msgSubscribe) Serialize() ([]byte, error) {
-	return []byte{}, nil
+	pbmsg := pb.Subscription{
+		Vni: uint32(msg.VNI),
+	}
+
+	msgBytes, err := proto.Marshal(&pbmsg)
+	if err != nil {
+		return nil, fmt.Errorf("Could not marshal message: %v", err)
+	}
+
+	if len(msgBytes) > 1188 {
+		return nil, fmt.Errorf("Message too long: %d bytes > maximum of 1188 bytes", len(msgBytes))
+	}
+
+	return msgBytes, nil
 }
 
 type msgUnsubscribe struct {
 	message
-	VNI uint32
+	VNI VNI
 }
 
 func (msg msgUnsubscribe) Serialize() ([]byte, error) {
-	return []byte{}, nil
+	return nil, fmt.Errorf("NOT IMPLEMENTED")
 }
 
 type msgUpdate struct {
@@ -212,7 +244,7 @@ func deserializeSubscribeMsg(pktBytes []byte) (*msgSubscribe, error) {
 	}
 
 	return &msgSubscribe{
-		VNI: pbmsg.Vni,
+		VNI: VNI(pbmsg.Vni),
 	}, nil
 }
 
@@ -223,7 +255,7 @@ func deserializeUnsubscribeMsg(pktBytes []byte) (*msgUnsubscribe, error) {
 	}
 
 	return &msgUnsubscribe{
-		VNI: pbmsg.Vni,
+		VNI: VNI(pbmsg.Vni),
 	}, nil
 }
 

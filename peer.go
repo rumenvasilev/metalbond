@@ -24,9 +24,6 @@ type MetalBondPeer struct {
 	keepaliveInterval uint32
 	keepaliveTimer    *time.Timer
 
-	mySubscriptions     map[uint32]bool
-	mySubscriptionsLock sync.Mutex
-
 	shutdown      chan bool
 	keepaliveStop chan bool
 	txChan        chan []byte
@@ -59,6 +56,10 @@ func NewMetalBondPeer(
 	return &peer
 }
 
+func (p *MetalBondPeer) String() string {
+	return fmt.Sprintf("%s", p.remoteAddr)
+}
+
 func (p *MetalBondPeer) GetState() ConnectionState {
 	p.stateLock.RLock()
 	state := p.state
@@ -66,18 +67,13 @@ func (p *MetalBondPeer) GetState() ConnectionState {
 	return state
 }
 
-func (p *MetalBondPeer) Subscribe(vni uint32) error {
+func (p *MetalBondPeer) Subscribe(vni VNI) error {
 	if p.direction == INCOMING {
 		return fmt.Errorf("Cannot subscribe on incoming connection")
 	}
-
-	p.mySubscriptionsLock.Lock()
-	defer p.mySubscriptionsLock.Unlock()
-	if _, exists := p.mySubscriptions[vni]; exists {
-		return fmt.Errorf("Already subscribed")
+	if p.GetState() != ESTABLISHED {
+		return fmt.Errorf("Connection not ESTABLISHED")
 	}
-
-	p.mySubscriptions[vni] = true
 
 	msg := msgSubscribe{
 		VNI: vni,
@@ -86,18 +82,10 @@ func (p *MetalBondPeer) Subscribe(vni uint32) error {
 	return p.sendMessage(msg)
 }
 
-func (p *MetalBondPeer) Unsubscribe(vni uint32) error {
+func (p *MetalBondPeer) Unsubscribe(vni VNI) error {
 	if p.direction == INCOMING {
 		return fmt.Errorf("Cannot unsubscribe on incoming connection")
 	}
-
-	p.mySubscriptionsLock.Lock()
-	defer p.mySubscriptionsLock.Unlock()
-	if _, exists := p.mySubscriptions[vni]; !exists {
-		return fmt.Errorf("Not subscribed to table %d", vni)
-	}
-
-	delete(p.mySubscriptions, vni)
 
 	msg := msgUnsubscribe{
 		VNI: vni,
@@ -125,6 +113,12 @@ func (p *MetalBondPeer) setState(state ConnectionState) {
 	p.stateLock.Unlock()
 
 	if state == ESTABLISHED {
+		p.metalbond.mtxMySubscriptions.RLock()
+		for sub := range p.metalbond.mySubscriptions {
+			p.Subscribe(sub)
+		}
+		p.metalbond.mtxMySubscriptions.RUnlock()
+
 		for _, rt := range p.metalbond.getMyAnnouncements() {
 			for dest, hops := range rt.Routes {
 				for _, hop := range hops {
@@ -146,25 +140,7 @@ func (p *MetalBondPeer) setState(state ConnectionState) {
 }
 
 func (p *MetalBondPeer) log() *logrus.Entry {
-	var state string
-	switch p.GetState() {
-	case CONNECTING:
-		state = "CONNECTING"
-	case HELLO_RECEIVED:
-		state = "HELLO_RECEIVED"
-	case HELLO_SENT:
-		state = "HELLO_SENT"
-	case ESTABLISHED:
-		state = "ESTABLISHED"
-	case RETRY:
-		state = "RETRY"
-	case CLOSED:
-		state = "CLOSED"
-	default:
-		state = "INVALID"
-	}
-
-	return logrus.WithField("peer", p.remoteAddr).WithField("state", state)
+	return logrus.WithField("peer", p.remoteAddr).WithField("state", p.GetState().String())
 }
 
 func (p *MetalBondPeer) handle() {
@@ -383,6 +359,7 @@ func (p *MetalBondPeer) processRxKeepalive(msg msgKeepalive) {
 }
 
 func (p *MetalBondPeer) processRxSubscribe(msg msgSubscribe) {
+	p.metalbond.addSubscriber(p, msg.VNI)
 }
 
 func (p *MetalBondPeer) processRxUnsubscribe(msg msgUnsubscribe) {
