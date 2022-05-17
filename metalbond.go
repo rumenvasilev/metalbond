@@ -11,18 +11,21 @@ import (
 
 type RouteTable struct {
 	VNI    VNI
-	Routes map[Destination]NextHop
+	Routes map[Destination][]NextHop
 }
 
 type MetalBond struct {
 	mtxRouteTables sync.RWMutex
 	routeTables    map[VNI]RouteTable
 
+	mtxMyAnnouncements sync.RWMutex
+	myAnnouncements    map[VNI]RouteTable
+
 	mtxSubscriptions sync.RWMutex                    // this locks a bit much (all VNIs). We could create a mutex for every VNI instead.
 	subscriptions    map[VNI]map[*MetalBondPeer]bool // HashMap of HashSet
 
 	peers             map[string]*MetalBondPeer
-	peerMtx           sync.Mutex
+	peerMtx           sync.RWMutex
 	keepaliveInterval uint32
 	shuttingDown      bool
 
@@ -35,6 +38,8 @@ type MetalBond struct {
 
 func NewMetalBond(keepaliveInterval uint32) *MetalBond {
 	m := MetalBond{
+		routeTables:       map[VNI]RouteTable{},
+		myAnnouncements:   make(map[VNI]RouteTable),
 		keepaliveInterval: keepaliveInterval,
 		peers:             map[string]*MetalBondPeer{},
 	}
@@ -77,8 +82,37 @@ func (m *MetalBond) RemovePeer(addr string) error {
 	return nil
 }
 
-func (m *MetalBond) AnnounceRoute(vni uint, dest Destination, hop NextHop) error {
+func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error {
 	m.log().Infof("Announcing VNI %d: %s via %s", vni, dest, hop)
+
+	m.mtxMyAnnouncements.Lock()
+
+	if _, exists := m.myAnnouncements[vni]; !exists {
+		m.myAnnouncements[vni] = RouteTable{
+			VNI:    vni,
+			Routes: make(map[Destination][]NextHop),
+		}
+	}
+
+	if _, exists := m.myAnnouncements[vni].Routes[dest]; !exists {
+		m.myAnnouncements[vni].Routes[dest] = []NextHop{hop}
+	}
+	m.mtxMyAnnouncements.Unlock()
+
+	m.peerMtx.Lock()
+	defer m.peerMtx.Unlock()
+
+	for _, p := range m.peers {
+		if p.GetState() == ESTABLISHED {
+			upd := msgUpdate{
+				VNI:         vni,
+				Destination: dest,
+				NextHop:     hop,
+			}
+			p.SendUpdate(upd)
+		}
+	}
+
 	return nil
 }
 

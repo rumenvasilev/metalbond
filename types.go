@@ -141,13 +141,52 @@ func (msg msgUnsubscribe) Serialize() ([]byte, error) {
 type msgUpdate struct {
 	message
 	Action      UpdateAction
-	VNI         uint32
+	VNI         VNI
 	Destination Destination
 	NextHop     NextHop
 }
 
 func (msg msgUpdate) Serialize() ([]byte, error) {
-	return []byte{}, nil
+	pbmsg := pb.Update{
+		Vni:         uint32(msg.VNI),
+		Destination: &pb.Destination{},
+		NextHop:     &pb.NextHop{},
+	}
+	switch msg.Action {
+	case ADD:
+		pbmsg.Action = pb.Action_ADD
+	case REMOVE:
+		pbmsg.Action = pb.Action_REMOVE
+	default:
+		return nil, fmt.Errorf("Invalid UPDATE action")
+	}
+
+	switch msg.Destination.IPVersion {
+	case IPV4:
+		msg.Destination.IPVersion = IPVersion(pb.IPVersion_IPv4)
+	case IPV6:
+		msg.Destination.IPVersion = IPVersion(pb.IPVersion_IPv6)
+	default:
+		return nil, fmt.Errorf("Invalid Destination IP version")
+	}
+	pbmsg.Destination.Prefix = msg.Destination.Prefix.Addr().AsSlice()
+	pbmsg.Destination.PrefixLength = uint32(msg.Destination.Prefix.Bits())
+
+	pbmsg.NextHop.TargetVNI = msg.NextHop.TargetVNI
+	pbmsg.NextHop.TargetAddress = msg.NextHop.TargetAddress.AsSlice()
+
+	// TODO: Add NAT and LB Stuff
+
+	msgBytes, err := proto.Marshal(&pbmsg)
+	if err != nil {
+		return nil, fmt.Errorf("Could not marshal message: %v", err)
+	}
+
+	if len(msgBytes) > 1188 {
+		return nil, fmt.Errorf("Message too long: %d bytes > maximum of 1188 bytes", len(msgBytes))
+	}
+
+	return msgBytes, nil
 }
 
 func deserializeHelloMsg(pktBytes []byte) (*msgHello, error) {
@@ -194,6 +233,10 @@ func deserializeUpdateMsg(pktBytes []byte) (*msgUpdate, error) {
 		action = REMOVE
 	}
 
+	if pbmsg.Destination == nil {
+		return nil, fmt.Errorf("Destination is nil")
+	}
+
 	ipversion := IPV6
 	if pbmsg.Destination.IpVersion == pb.IPVersion_IPv4 {
 		ipversion = IPV4
@@ -222,7 +265,7 @@ func deserializeUpdateMsg(pktBytes []byte) (*msgUpdate, error) {
 
 	return &msgUpdate{
 		Action:      action,
-		VNI:         pbmsg.Vni,
+		VNI:         VNI(pbmsg.Vni),
 		Destination: destination,
 		NextHop:     nexthop,
 	}, nil

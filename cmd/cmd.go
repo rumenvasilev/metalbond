@@ -118,7 +118,10 @@ func main() {
 				NAT:           false,
 			}
 
-			m.AnnounceRoute(uint(vni), dest, hop)
+			// TODO: Remove. This is just to wait for connection to be ESTABLISHED, so the route gets announced by AnnounceRoute() itself.
+			time.Sleep(2 * time.Second)
+
+			m.AnnounceRoute(metalbond.VNI(vni), dest, hop)
 		}
 
 		// Wait for SIGINTs
