@@ -53,6 +53,15 @@ The metalbond protocol relies on IPv6 transport. Therefore we assume a minimum M
 
 #### UPDATE Message
 
+Install Routes
+--------------
+To install routes on a Linux system, you first need to create an IP-in-IPv6 tunnel endpoint:
+
+    ip link add overlay-tun type ip6tnl mode any external
+
+and then start the metalbond client with the `--install-routes` command line parameter. Set the tunnel device using the `tun` parameter:
+
+    ./metalbond client --install-routes --tun ip6tnl0
 
 License
 -------
