@@ -25,7 +25,7 @@ var CLI struct {
 	Client struct {
 		Server        []string `help:"Server address. You may define multiple servers."`
 		Subscribe     []uint32 `help:"Subscribe to VNIs"`
-		Announce      []string `help:"Announce Prefixes in VNIs (e.g. 23#2001:db8:cafe::/64#2001:db8::cafe)"`
+		Announce      []string `help:"Announce Prefixes in VNIs (e.g. 23#10.0.23.0/24#2001:db8::1)"`
 		Verbose       bool     `help:"Enable debug logging" short:"v"`
 		InstallRoutes bool     `help:"install routes via netlink"`
 		Tun           string   `help:"ip6tnl tun device name"`

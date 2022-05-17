@@ -15,7 +15,9 @@ type RouteTable struct {
 }
 
 type MetalBond struct {
-	routeTables      map[VNI]RouteTable
+	mtxRouteTables sync.RWMutex
+	routeTables    map[VNI]RouteTable
+
 	mtxSubscriptions sync.RWMutex                    // this locks a bit much (all VNIs). We could create a mutex for every VNI instead.
 	subscriptions    map[VNI]map[*MetalBondPeer]bool // HashMap of HashSet
 
@@ -28,7 +30,7 @@ type MetalBond struct {
 	tunDevice          netlink.Link
 	kernelRouteTableID int
 
-	lis *net.Listener
+	lis *net.Listener // for server only
 }
 
 func NewMetalBond(keepaliveInterval uint32) *MetalBond {
