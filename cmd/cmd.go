@@ -20,6 +20,7 @@ var CLI struct {
 		Listen    string `help:"listen address. e.g. [::]:4711"`
 		Verbose   bool   `help:"Enable debug logging" short:"v"`
 		Keepalive uint32 `help:"Keepalive Interval"`
+		Http      string `help:"HTTP Server listen address. e.g. [::]:4712"`
 	} `cmd:"" help:"Run MetalBond Server"`
 
 	Client struct {
@@ -31,6 +32,7 @@ var CLI struct {
 		Tun           string   `help:"ip6tnl tun device name"`
 		RouteTable    int      `help:"install routes into a specified table (e.g. when routes should be installed into a VRF)"`
 		Keepalive     uint32   `help:"Keepalive Interval"`
+		Http          string   `help:"HTTP Server listen address. e.g. [::]:4712"`
 	} `cmd:"" help:"Run MetalBond Client"`
 }
 
@@ -52,6 +54,10 @@ func main() {
 		}
 
 		m := metalbond.NewMetalBond(CLI.Server.Keepalive)
+		if len(CLI.Server.Http) > 0 {
+			m.StartHTTPServer(CLI.Server.Http)
+		}
+
 		m.StartServer(CLI.Server.Listen)
 
 		// Wait for SIGINTs
@@ -70,6 +76,10 @@ func main() {
 		}
 
 		m := metalbond.NewMetalBond(CLI.Client.Keepalive)
+		if len(CLI.Client.Http) > 0 {
+			m.StartHTTPServer(CLI.Client.Http)
+		}
+
 		if CLI.Client.InstallRoutes {
 			if err := m.EnableNetlink(CLI.Client.Tun, CLI.Client.RouteTable); err != nil {
 				log.Fatalf("Cannot enable netlink: %v", err)

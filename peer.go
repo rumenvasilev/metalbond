@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type MetalBondPeer struct {
+type metalBondPeer struct {
 	conn       *net.Conn
 	remoteAddr string
 	direction  ConnectionDirection
@@ -40,9 +40,9 @@ func NewMetalBondPeer(
 	remoteAddr string,
 	keepaliveInterval uint32,
 	direction ConnectionDirection,
-	metalbond *MetalBond) *MetalBondPeer {
+	metalbond *MetalBond) *metalBondPeer {
 
-	peer := MetalBondPeer{
+	peer := metalBondPeer{
 		conn:              pconn,
 		remoteAddr:        remoteAddr,
 		direction:         direction,
@@ -56,18 +56,18 @@ func NewMetalBondPeer(
 	return &peer
 }
 
-func (p *MetalBondPeer) String() string {
+func (p *metalBondPeer) String() string {
 	return fmt.Sprintf("%s", p.remoteAddr)
 }
 
-func (p *MetalBondPeer) GetState() ConnectionState {
+func (p *metalBondPeer) GetState() ConnectionState {
 	p.stateLock.RLock()
 	state := p.state
 	p.stateLock.RUnlock()
 	return state
 }
 
-func (p *MetalBondPeer) Subscribe(vni VNI) error {
+func (p *metalBondPeer) Subscribe(vni VNI) error {
 	if p.direction == INCOMING {
 		return fmt.Errorf("Cannot subscribe on incoming connection")
 	}
@@ -82,7 +82,7 @@ func (p *MetalBondPeer) Subscribe(vni VNI) error {
 	return p.sendMessage(msg)
 }
 
-func (p *MetalBondPeer) Unsubscribe(vni VNI) error {
+func (p *metalBondPeer) Unsubscribe(vni VNI) error {
 	if p.direction == INCOMING {
 		return fmt.Errorf("Cannot unsubscribe on incoming connection")
 	}
@@ -94,7 +94,7 @@ func (p *MetalBondPeer) Unsubscribe(vni VNI) error {
 	return p.sendMessage(msg)
 }
 
-func (p *MetalBondPeer) SendUpdate(upd msgUpdate) error {
+func (p *metalBondPeer) SendUpdate(upd msgUpdate) error {
 	if p.GetState() != ESTABLISHED {
 		return fmt.Errorf("Connection not ESTABLISHED")
 	}
@@ -107,12 +107,14 @@ func (p *MetalBondPeer) SendUpdate(upd msgUpdate) error {
 //            PRIVATE METHODS BELOW                              //
 ///////////////////////////////////////////////////////////////////
 
-func (p *MetalBondPeer) setState(state ConnectionState) {
+func (p *metalBondPeer) setState(newState ConnectionState) {
+	oldState := p.state
+
 	p.stateLock.Lock()
-	p.state = state
+	p.state = newState
 	p.stateLock.Unlock()
 
-	if state == ESTABLISHED {
+	if oldState != newState && newState == ESTABLISHED {
 		p.metalbond.mtxMySubscriptions.RLock()
 		for sub := range p.metalbond.mySubscriptions {
 			p.Subscribe(sub)
@@ -121,7 +123,7 @@ func (p *MetalBondPeer) setState(state ConnectionState) {
 
 		for _, rt := range p.metalbond.getMyAnnouncements() {
 			for dest, hops := range rt.Routes {
-				for _, hop := range hops {
+				for hop := range hops {
 
 					upd := msgUpdate{
 						VNI:         rt.VNI,
@@ -137,13 +139,24 @@ func (p *MetalBondPeer) setState(state ConnectionState) {
 			}
 		}
 	}
+
+	// Connection lost
+	if oldState != newState && newState != ESTABLISHED {
+		for vni, peers := range p.metalbond.subscriptions {
+			for peer := range peers {
+				if p == peer {
+					p.metalbond.removeSubscriber(p, vni)
+				}
+			}
+		}
+	}
 }
 
-func (p *MetalBondPeer) log() *logrus.Entry {
+func (p *metalBondPeer) log() *logrus.Entry {
 	return logrus.WithField("peer", p.remoteAddr).WithField("state", p.GetState().String())
 }
 
-func (p *MetalBondPeer) handle() {
+func (p *metalBondPeer) handle() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 
@@ -208,7 +221,7 @@ func (p *MetalBondPeer) handle() {
 	}
 }
 
-func (p *MetalBondPeer) rxLoop() {
+func (p *metalBondPeer) rxLoop() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 
@@ -307,7 +320,7 @@ func (p *MetalBondPeer) rxLoop() {
 	}
 }
 
-func (p *MetalBondPeer) processRxHello(msg msgHello) {
+func (p *metalBondPeer) processRxHello(msg msgHello) {
 	// Use lower Keepalive interval of both client and server as peer config
 	p.isServer = msg.IsServer
 	keepaliveInterval := p.keepaliveInterval
@@ -335,7 +348,7 @@ func (p *MetalBondPeer) processRxHello(msg msgHello) {
 	}
 }
 
-func (p *MetalBondPeer) processRxKeepalive(msg msgKeepalive) {
+func (p *metalBondPeer) processRxKeepalive(msg msgKeepalive) {
 	if p.direction == INCOMING && p.GetState() == HELLO_SENT {
 		p.log().Infof("Connection established")
 		p.setState(ESTABLISHED)
@@ -358,14 +371,14 @@ func (p *MetalBondPeer) processRxKeepalive(msg msgKeepalive) {
 	}
 }
 
-func (p *MetalBondPeer) processRxSubscribe(msg msgSubscribe) {
+func (p *metalBondPeer) processRxSubscribe(msg msgSubscribe) {
 	p.metalbond.addSubscriber(p, msg.VNI)
 }
 
-func (p *MetalBondPeer) processRxUnsubscribe(msg msgUnsubscribe) {
+func (p *metalBondPeer) processRxUnsubscribe(msg msgUnsubscribe) {
 }
 
-func (p *MetalBondPeer) processRxUpdate(msg msgUpdate) {
+func (p *metalBondPeer) processRxUpdate(msg msgUpdate) {
 	switch msg.Action {
 	case ADD:
 		err := p.metalbond.addReceivedRoute(p, msg.VNI, msg.Destination, msg.NextHop)
@@ -379,7 +392,7 @@ func (p *MetalBondPeer) processRxUpdate(msg msgUpdate) {
 	}
 }
 
-func (p *MetalBondPeer) Close() {
+func (p *metalBondPeer) Close() {
 	if p.GetState() != CLOSED {
 		p.setState(CLOSED)
 		p.shutdown <- true
@@ -388,7 +401,7 @@ func (p *MetalBondPeer) Close() {
 	}
 }
 
-func (p *MetalBondPeer) Reset() {
+func (p *metalBondPeer) Reset() {
 	if p.GetState() == CLOSED {
 		return
 	}
@@ -415,7 +428,7 @@ func (p *MetalBondPeer) Reset() {
 	}
 }
 
-func (p *MetalBondPeer) keepaliveLoop() {
+func (p *metalBondPeer) keepaliveLoop() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 
@@ -452,11 +465,11 @@ func (p *MetalBondPeer) keepaliveLoop() {
 	}
 }
 
-func (p *MetalBondPeer) resetKeepaliveTimeout() {
+func (p *metalBondPeer) resetKeepaliveTimeout() {
 	p.keepaliveTimer.Reset(time.Duration(p.keepaliveInterval) * time.Second * 5 / 2)
 }
 
-func (p *MetalBondPeer) sendMessage(msg message) error {
+func (p *metalBondPeer) sendMessage(msg message) error {
 	var msgType MESSAGE_TYPE
 	switch msg.(type) {
 	case msgHello:
@@ -491,7 +504,7 @@ func (p *MetalBondPeer) sendMessage(msg message) error {
 	return nil
 }
 
-func (p *MetalBondPeer) txLoop() {
+func (p *metalBondPeer) txLoop() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 

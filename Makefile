@@ -3,14 +3,15 @@ all:
 	cd cmd && go build -o ../target/metalbond
 
 run-server: all
-	cd target && ./metalbond server -v \
+	cd target && ./metalbond server \
 		--listen [::]:4711 \
-		--keepalive 10
+		--http [::]:4712 \
+		--keepalive 3
 
 run-client1: all
-	cd target && sudo ./metalbond client -v \
+	cd target && sudo ./metalbond client \
 		--server [::1]:4711 \
-		--keepalive 5 \
+		--keepalive 2 \
 		--subscribe 23 \
 		--announce 23#2001:db8:1::/48#2001:db8::cafe \
 		--announce 23#192.168.0.0/16#2001:db8::cafe \
@@ -18,12 +19,14 @@ run-client1: all
 		--tun ip6tnl0
 
 run-client2: all
-	cd target && ./metalbond client -v \
+	cd target && ./metalbond client \
 		--server [::1]:4711 \
-		--keepalive 5 \
+		--keepalive 2 \
 		--subscribe 23 \
 		--subscribe 42 \
-		--announce 23#2001:db8:2::/48#2001:db8::beef \
+		--announce 23#2001:db8:2::/48#2001:db8::2:beef \
+		--announce 23#2001:db8:3::/48#2001:db8::3:beef \
+		--announce 23#2001:db8:4::/48#2001:db8::4:beef \
 		--announce 42#10.0.0.0/8#2001:db8::beef
 
 .PHONY: proto
