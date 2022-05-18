@@ -5,6 +5,7 @@ func (m *MetalBond) installRoute(dest Destination, hop NextHop) error {
 	// Destination: dest
 	// via Underlay IP as defined in: hop
 	// into Kernel route table: m.kernelRouteTableID
+	// device: m.tunDevice
 
 	return nil
 }

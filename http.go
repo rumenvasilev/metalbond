@@ -6,11 +6,14 @@ import (
 	"net/http"
 	"text/template"
 	"time"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 type jsonRoutes struct {
-	Date string                         `json:"date"`
-	VNet map[uint32]map[string][]string `json:"vnet"`
+	Date             string                         `json:"date"`
+	VNet             map[uint32]map[string][]string `json:"vnet"`
+	MetalBondVersion string                         `json:"metalbondVersion"`
 }
 
 type jsonServer struct {
@@ -24,6 +27,7 @@ func serveJsonRouteTable(m *MetalBond, listen string) error {
 
 	http.HandleFunc("/", js.mainHandler)
 	http.HandleFunc("/routes.json", js.jsonHandler)
+	http.HandleFunc("/routes.yaml", js.yamlHandler)
 
 	http.ListenAndServe(listen, nil)
 
@@ -32,8 +36,9 @@ func serveJsonRouteTable(m *MetalBond, listen string) error {
 
 func (j *jsonServer) getJsonRoutes() (jsonRoutes, error) {
 	js := jsonRoutes{
-		Date: time.Now().Format("2006-01-02 15:04:05"),
-		VNet: make(map[uint32]map[string][]string),
+		MetalBondVersion: METALBOND_VERSION,
+		Date:             time.Now().Format("2006-01-02 15:04:05"),
+		VNet:             make(map[uint32]map[string][]string),
 	}
 
 	for vni, rt := range j.m.routeTables {
@@ -79,7 +84,7 @@ func (j *jsonServer) jsonHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out, err := json.Marshal(js)
+	out, err := json.MarshalIndent(js, "", "  ")
 	if err != nil {
 		w.WriteHeader(500)
 		fmt.Fprintf(w, "Error: %v", err)
@@ -87,5 +92,24 @@ func (j *jsonServer) jsonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Content-Type", "application/json")
+	w.Write(out)
+}
+
+func (j *jsonServer) yamlHandler(w http.ResponseWriter, r *http.Request) {
+	js, err := j.getJsonRoutes()
+	if err != nil {
+		w.WriteHeader(500)
+		fmt.Fprintf(w, "Error: %v", err)
+		return
+	}
+
+	out, err := yaml.Marshal(js)
+	if err != nil {
+		w.WriteHeader(500)
+		fmt.Fprintf(w, "Error: %v", err)
+		return
+	}
+
+	w.Header().Add("Content-Type", "text/yaml")
 	w.Write(out)
 }

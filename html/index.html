@@ -7,6 +7,8 @@
                 font-family: Verdana, Geneva, Tahoma, sans-serif;
                 padding: 2em;
                 margin: 0;
+                background-color: #ffffff;
+                color: #000000;
             }
             ul {
                 list-style: outside none none;
@@ -31,11 +33,19 @@
                 padding-bottom: 0.5em;
                 background-color: #ffffff;
                 text-align: center;
+                font-size: small;
+            }
+            .formats {
+                position: absolute;
+                top: 1em;
+                right: 1em;
+                font-size: small;
             }
         </style>
     </head>
     <body>
         <h1>MetalBond - Route Tables</h1>
+        <div class="formats"><a href="/routes.json">JSON</a> / <a href="/routes.yaml">YAML</a></div>
         <hr/>
         <p>
             VNet
@@ -59,8 +69,7 @@
         <hr/>
         {{end}}
         <div id="date">
-            <hr/>
-            <p>{{.Date}}</p>
+            <p>MetalBond {{.MetalBondVersion}} - {{.Date}}</p>
         </div>
     </body>
 </html>
