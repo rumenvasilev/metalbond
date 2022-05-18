@@ -28,6 +28,9 @@ run-client2: all
 		--announce 23#2001:db8:2::/48#2001:db8::2:beef \
 		--announce 23#2001:db8:3::/48#2001:db8::3:beef \
 		--announce 23#2001:db8:4::/48#2001:db8::4:beef \
+		--announce 23#2001:db8:4::/48#2001:db8::4a:beef \
+		--announce 23#2001:db8:4::/48#2001:db8::4b:beef \
+		--announce 23#2001:db8:4::/48#2001:db8::4c:beef \
 		--announce 42#10.0.0.0/8#2001:db8::beef
 
 .PHONY: proto

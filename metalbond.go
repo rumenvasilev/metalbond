@@ -214,6 +214,14 @@ func (m *MetalBond) addReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Dest
 	// Increment number of received UPDATES for this route. So if one server goes down, this route is still valid as it also came over a second server.
 	m.routeTables[vni].Routes[dest][hop] += 1
 
+	// if new route and installRoutes == true
+	if m.routeTables[vni].Routes[dest][hop] == 1 && m.installRoutes == true {
+		err := m.installRoute(dest, hop)
+		if err != nil {
+			m.log().Errorf("Could not install route: %v", err)
+		}
+	}
+
 	m.mtxRouteTables.Unlock()
 
 	m.log().Infof("Received Route: VNI %d, Prefix: %s, NextHop: %s", vni, dest, hop)
