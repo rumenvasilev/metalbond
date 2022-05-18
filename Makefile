@@ -1,5 +1,6 @@
 all:
 	mkdir -p target
+	rm -rf target/html && cp -ra html target
 	cd cmd && go build -o ../target/metalbond
 
 run-server: all

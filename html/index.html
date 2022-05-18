@@ -5,16 +5,32 @@
         <style type="text/css">
             body {
                 font-family: Verdana, Geneva, Tahoma, sans-serif;
-                padding: 1.5em;
+                padding: 2em;
+                margin: 0;
             }
             ul {
                 list-style: outside none none;
                 padding-left: 0;
+                margin-bottom: 1.5em;
             }
             ul ul {
                 list-style-type: disc;
                 padding-left: 2em;
-                padding-bottom: 1em;
+            }
+            li {
+                padding-top: 0.25em;
+            }
+            #date {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 3em;
+                padding-left: 2em;
+                padding-right: 2em;
+                padding-bottom: 0.5em;
+                background-color: #ffffff;
+                text-align: center;
             }
         </style>
     </head>
@@ -42,6 +58,9 @@
         </ul>
         <hr/>
         {{end}}
-        <p>{{.Date}}</p>
+        <div id="date">
+            <hr/>
+            <p>{{.Date}}</p>
+        </div>
     </body>
 </html>

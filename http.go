@@ -49,7 +49,7 @@ func (j *jsonServer) getJsonRoutes() (jsonRoutes, error) {
 }
 
 func (j *jsonServer) mainHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.New("index.html").ParseFiles("../html/index.html")
+	tmpl, err := template.New("index.html").ParseFiles("html/index.html")
 	if err != nil {
 		w.WriteHeader(500)
 		fmt.Fprintf(w, "Error: %v", err)
