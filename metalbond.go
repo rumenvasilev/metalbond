@@ -9,17 +9,17 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-type RouteTable struct {
+type routeTable struct {
 	VNI    VNI
 	Routes map[Destination]map[NextHop]uint8
 }
 
 type MetalBond struct {
 	mtxRouteTables sync.RWMutex
-	routeTables    map[VNI]RouteTable
+	routeTables    map[VNI]routeTable
 
 	mtxMyAnnouncements sync.RWMutex
-	myAnnouncements    map[VNI]RouteTable
+	myAnnouncements    map[VNI]routeTable
 	mtxMySubscriptions sync.RWMutex
 	mySubscriptions    map[VNI]bool
 
@@ -41,8 +41,8 @@ type MetalBond struct {
 
 func NewMetalBond(keepaliveInterval uint32) *MetalBond {
 	m := MetalBond{
-		routeTables:       map[VNI]RouteTable{},
-		myAnnouncements:   make(map[VNI]RouteTable),
+		routeTables:       map[VNI]routeTable{},
+		myAnnouncements:   make(map[VNI]routeTable),
 		mySubscriptions:   make(map[VNI]bool),
 		subscriptions:     make(map[VNI]map[*metalBondPeer]bool),
 		keepaliveInterval: keepaliveInterval,
@@ -67,7 +67,7 @@ func (m *MetalBond) AddPeer(addr string, direction ConnectionDirection) error {
 		return fmt.Errorf("Peer already registered")
 	}
 
-	m.peers[addr] = NewMetalBondPeer(
+	m.peers[addr] = newMetalBondPeer(
 		nil,
 		addr,
 		m.keepaliveInterval,
@@ -120,7 +120,7 @@ func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error 
 	m.mtxMyAnnouncements.Lock()
 
 	if _, exists := m.myAnnouncements[vni]; !exists {
-		m.myAnnouncements[vni] = RouteTable{
+		m.myAnnouncements[vni] = routeTable{
 			VNI:    vni,
 			Routes: make(map[Destination]map[NextHop]uint8),
 		}
@@ -185,8 +185,8 @@ func (m *MetalBond) distributeRouteToPeers(fromPeer *metalBondPeer, vni VNI, des
 	return nil
 }
 
-func (m *MetalBond) getMyAnnouncements() []RouteTable {
-	t := []RouteTable{}
+func (m *MetalBond) getMyAnnouncements() []routeTable {
+	t := []routeTable{}
 	m.mtxMyAnnouncements.RLock()
 	defer m.mtxMyAnnouncements.RUnlock()
 
@@ -201,7 +201,7 @@ func (m *MetalBond) addReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Dest
 	m.mtxRouteTables.Lock()
 
 	if _, exists := m.routeTables[vni]; !exists {
-		m.routeTables[vni] = RouteTable{
+		m.routeTables[vni] = routeTable{
 			VNI:    vni,
 			Routes: make(map[Destination]map[NextHop]uint8),
 		}
@@ -295,7 +295,7 @@ func (m *MetalBond) StartServer(listenAddress string) error {
 				return
 			}
 
-			m.peers[conn.RemoteAddr().String()] = NewMetalBondPeer(
+			m.peers[conn.RemoteAddr().String()] = newMetalBondPeer(
 				&conn,
 				conn.RemoteAddr().String(),
 				m.keepaliveInterval,

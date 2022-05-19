@@ -35,7 +35,7 @@ type metalBondPeer struct {
 	wg            sync.WaitGroup
 }
 
-func NewMetalBondPeer(
+func newMetalBondPeer(
 	pconn *net.Conn,
 	remoteAddr string,
 	keepaliveInterval uint32,
