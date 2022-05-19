@@ -318,8 +318,6 @@ func (m *MetalBond) Shutdown() {
 	for p := range m.peers {
 		m.RemovePeer(p)
 	}
-
-	//time.Sleep(2 * time.Second)
 }
 
 func (m *MetalBond) EnableNetlink(linkName string, routeTable int) error {

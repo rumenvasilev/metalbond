@@ -160,9 +160,9 @@ func (p *metalBondPeer) handle() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 
-	p.txChan = make(chan []byte)
-	p.shutdown = make(chan bool)
-	p.keepaliveStop = make(chan bool)
+	p.txChan = make(chan []byte, 32768)
+	p.shutdown = make(chan bool, 10)
+	p.keepaliveStop = make(chan bool, 10)
 	p.rxHello = make(chan msgHello)
 	p.rxKeepalive = make(chan msgKeepalive)
 	p.rxSubscribe = make(chan msgSubscribe)
@@ -171,6 +171,14 @@ func (p *metalBondPeer) handle() {
 
 	// outgoing connections still need to be established. pconn is nil.
 	for p.conn == nil {
+
+		select {
+		case <-p.shutdown:
+			return
+		default:
+			// proceed
+		}
+
 		conn, err := net.Dial("tcp", p.remoteAddr)
 		if err != nil {
 			retryInterval := time.Duration(5 * time.Second)
