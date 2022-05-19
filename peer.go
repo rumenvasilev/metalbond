@@ -163,11 +163,11 @@ func (p *metalBondPeer) handle() {
 	p.txChan = make(chan []byte, 32768)
 	p.shutdown = make(chan bool, 10)
 	p.keepaliveStop = make(chan bool, 10)
-	p.rxHello = make(chan msgHello)
-	p.rxKeepalive = make(chan msgKeepalive)
-	p.rxSubscribe = make(chan msgSubscribe)
-	p.rxUnsubscribe = make(chan msgUnsubscribe)
-	p.rxUpdate = make(chan msgUpdate)
+	p.rxHello = make(chan msgHello, 5)
+	p.rxKeepalive = make(chan msgKeepalive, 5)
+	p.rxSubscribe = make(chan msgSubscribe, 100)
+	p.rxUnsubscribe = make(chan msgUnsubscribe, 100)
+	p.rxUpdate = make(chan msgUpdate, 1000)
 
 	// outgoing connections still need to be established. pconn is nil.
 	for p.conn == nil {
