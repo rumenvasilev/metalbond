@@ -10,6 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var RETRY_INTERVAL = time.Duration(5 * time.Second)
+
 type metalBondPeer struct {
 	conn       *net.Conn
 	remoteAddr string
@@ -181,9 +183,8 @@ func (p *metalBondPeer) handle() {
 
 		conn, err := net.Dial("tcp", p.remoteAddr)
 		if err != nil {
-			retryInterval := time.Duration(5 * time.Second)
-			logrus.Infof("Cannot connect to server - %v - retry in %v", err, retryInterval)
-			time.Sleep(retryInterval)
+			logrus.Infof("Cannot connect to server - %v - retry in %v", err, RETRY_INTERVAL)
+			time.Sleep(RETRY_INTERVAL)
 			continue
 		}
 
@@ -224,6 +225,7 @@ func (p *metalBondPeer) handle() {
 			p.log().Debugf("Received UPDATE message")
 			p.processRxUpdate(msg)
 		case <-p.shutdown:
+			p.metalbond.cleanupPeer(p)
 			return
 		}
 	}
@@ -384,6 +386,7 @@ func (p *metalBondPeer) processRxSubscribe(msg msgSubscribe) {
 }
 
 func (p *metalBondPeer) processRxUnsubscribe(msg msgUnsubscribe) {
+	p.metalbond.removeSubscriber(p, msg.VNI)
 }
 
 func (p *metalBondPeer) processRxUpdate(msg msgUpdate) {
@@ -426,9 +429,9 @@ func (p *metalBondPeer) Reset() {
 		p.wg.Wait()
 
 		p.conn = nil
-		p.log().Infof("Closed. Waiting 3s...")
+		p.log().Infof("Closed. Waiting %s...", RETRY_INTERVAL)
 
-		time.Sleep(time.Duration(3 * time.Second))
+		time.Sleep(RETRY_INTERVAL)
 		p.setState(CONNECTING)
 		p.log().Infof("Reconnecting...")
 

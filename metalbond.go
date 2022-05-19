@@ -58,7 +58,7 @@ func (m *MetalBond) StartHTTPServer(listen string) error {
 	return nil
 }
 
-func (m *MetalBond) AddPeer(addr string, direction ConnectionDirection) error {
+func (m *MetalBond) AddPeer(addr string) error {
 	m.peerMtx.Lock()
 	defer m.peerMtx.Unlock()
 
@@ -71,7 +71,7 @@ func (m *MetalBond) AddPeer(addr string, direction ConnectionDirection) error {
 		nil,
 		addr,
 		m.keepaliveInterval,
-		direction,
+		OUTGOING,
 		m)
 
 	return nil
@@ -165,7 +165,7 @@ func (m *MetalBond) distributeRouteToPeers(fromPeer *metalBondPeer, vni VNI, des
 			continue
 		}
 
-		if m.isServer && p.isServer {
+		if fromPeer.isServer && p.isServer {
 			//m.log().WithField("peer", p).Debugf("Do not redistribute route received from another server. Skipping redistribution.")
 			continue
 		}
@@ -231,6 +231,8 @@ func (m *MetalBond) addReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Dest
 	return nil
 }
 
+// addSubscriber is called by metalBondPeer when an SUBSCRIBE message has been received from the peer.
+// Route updates belonging to the specified VNI will be sent to the peer afterwards.
 func (m *MetalBond) addSubscriber(peer *metalBondPeer, vni VNI) error {
 	m.log().Infof("addSubscriber(%s, %d)", peer, vni)
 	m.mtxSubscriptions.Lock()
@@ -271,10 +273,22 @@ func (m *MetalBond) addSubscriber(peer *metalBondPeer, vni VNI) error {
 	return nil
 }
 
+// removeSubscriber is called by metalBondPeer when an UNSUBSCRIBE message has been received from the peer.
 func (m *MetalBond) removeSubscriber(peer *metalBondPeer, vni VNI) error {
 	return fmt.Errorf("NOT IMPLEMENTED")
 }
 
+// cleanupPeer is called by metalBondPeer when connection is closed.
+// It will remove all peer's subscriptions and peer provided routes from MetalBond.
+func (m *MetalBond) cleanupPeer(p *metalBondPeer) error {
+	// Remove Subscriptions of peer
+	// Remove Routes learned by peer
+
+	return nil
+}
+
+// StartServer starts the MetalBond server asynchronously.
+// To stop the server again, call Shutdown().
 func (m *MetalBond) StartServer(listenAddress string) error {
 	lis, err := net.Listen("tcp", listenAddress)
 	m.lis = &lis
@@ -308,6 +322,7 @@ func (m *MetalBond) StartServer(listenAddress string) error {
 	return nil
 }
 
+// Shutdown stops the MetalBond server.
 func (m *MetalBond) Shutdown() {
 	m.log().Infof("Shutting down MetalBond...")
 	m.shuttingDown = true

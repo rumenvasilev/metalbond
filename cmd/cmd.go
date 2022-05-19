@@ -86,7 +86,7 @@ func main() {
 			}
 		}
 		for _, server := range CLI.Client.Server {
-			m.AddPeer(server, metalbond.OUTGOING)
+			m.AddPeer(server)
 		}
 
 		for _, subscription := range CLI.Client.Subscribe {
