@@ -53,7 +53,12 @@ func main() {
 			log.SetLevel(log.DebugLevel)
 		}
 
-		m := metalbond.NewMetalBond(CLI.Server.Keepalive)
+		config := metalbond.MetalBondConfig{
+			KeepaliveInterval: CLI.Server.Keepalive,
+		}
+
+		client := metalbond.NewDummyClient()
+		m := metalbond.NewMetalBond(config, client)
 		if len(CLI.Server.Http) > 0 {
 			m.StartHTTPServer(CLI.Server.Http)
 		}
@@ -70,21 +75,36 @@ func main() {
 	case "client":
 		log.Infof("Client")
 		log.Infof("  servers: %v", CLI.Client.Server)
+		var err error
 
 		if CLI.Client.Verbose {
 			log.SetLevel(log.DebugLevel)
 		}
 
-		m := metalbond.NewMetalBond(CLI.Client.Keepalive)
+		config := metalbond.MetalBondConfig{
+			KeepaliveInterval: CLI.Client.Keepalive,
+		}
+
+		var client metalbond.MetalBondClient
+		if CLI.Client.InstallRoutes {
+			client, err = metalbond.NewNetlinkClient(metalbond.NetlinkClientConfig{
+				VNITableMap: map[metalbond.VNI]int{
+					23: 23,
+				},
+				LinkName: CLI.Client.Tun,
+			})
+			if err != nil {
+				log.Fatalf("Cannot create MetalBond Client: %v", err)
+			}
+		} else {
+			client = metalbond.NewDummyClient()
+		}
+
+		m := metalbond.NewMetalBond(config, client)
 		if len(CLI.Client.Http) > 0 {
 			m.StartHTTPServer(CLI.Client.Http)
 		}
 
-		if CLI.Client.InstallRoutes {
-			if err := m.EnableNetlink(CLI.Client.Tun, CLI.Client.RouteTable); err != nil {
-				log.Fatalf("Cannot enable netlink: %v", err)
-			}
-		}
 		for _, server := range CLI.Client.Server {
 			m.AddPeer(server)
 		}

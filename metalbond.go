@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
 )
 
 type MetalBond struct {
@@ -24,22 +23,25 @@ type MetalBond struct {
 	keepaliveInterval uint32
 	shuttingDown      bool
 
-	installRoutes      bool
-	tunDevice          netlink.Link
-	kernelRouteTableID int
+	client MetalBondClient
 
 	lis      *net.Listener // for server only
 	isServer bool
 }
 
-func NewMetalBond(keepaliveInterval uint32) *MetalBond {
+type MetalBondConfig struct {
+	KeepaliveInterval uint32
+}
+
+func NewMetalBond(config MetalBondConfig, client MetalBondClient) *MetalBond {
 	m := MetalBond{
 		routeTable:        newRouteTable(),
 		myAnnouncements:   newRouteTable(),
 		mySubscriptions:   make(map[VNI]bool),
 		subscriptions:     make(map[VNI]map[*metalBondPeer]bool),
-		keepaliveInterval: keepaliveInterval,
+		keepaliveInterval: config.KeepaliveInterval,
 		peers:             map[string]*metalBondPeer{},
+		client:            client,
 	}
 
 	return &m
@@ -179,6 +181,11 @@ func (m *MetalBond) addReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Dest
 
 	m.distributeRouteToPeers(ADD, vni, dest, hop, fromPeer)
 
+	err = m.client.AddRoute(vni, dest, hop)
+	if err != nil {
+		m.log().Errorf("MetalBondClient.AddRoute call failed: %v", err)
+	}
+
 	return nil
 }
 
@@ -192,6 +199,11 @@ func (m *MetalBond) removeReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest D
 
 	if remaining == 0 {
 		m.distributeRouteToPeers(REMOVE, vni, dest, hop, fromPeer)
+	}
+
+	err = m.client.RemoveRoute(vni, dest, hop)
+	if err != nil {
+		m.log().Errorf("MetalBondClient.RemoveRoute call failed: %v", err)
 	}
 
 	return nil
@@ -285,21 +297,6 @@ func (m *MetalBond) Shutdown() {
 	for p := range m.peers {
 		m.RemovePeer(p)
 	}
-}
-
-func (m *MetalBond) EnableNetlink(linkName string, routeTable int) error {
-	link, err := netlink.LinkByName(linkName)
-	if err != nil {
-		return fmt.Errorf("Cannot get link '%s': %v", linkName, err)
-	}
-
-	m.installRoutes = true
-	m.tunDevice = link
-	m.kernelRouteTableID = routeTable
-
-	m.log().Infof("Enabled installing routes into route table %d via %s", m.kernelRouteTableID, m.tunDevice.Attrs().Name)
-
-	return nil
 }
 
 func (m *MetalBond) log() *logrus.Entry {
