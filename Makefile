@@ -25,6 +25,7 @@ run-client2: all
 		--keepalive 2 \
 		--subscribe 23 \
 		--subscribe 42 \
+		--announce 23#2001:db8:1::/48#2001:db8::cafe \
 		--announce 23#2001:db8:2::/48#2001:db8::2:beef \
 		--announce 23#2001:db8:3::/48#2001:db8::3:beef \
 		--announce 23#2001:db8:4::/48#2001:db8::4:beef \

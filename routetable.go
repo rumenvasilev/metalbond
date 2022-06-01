@@ -72,7 +72,7 @@ func (rt *routeTable) GetNextHopsByDestination(vni VNI, dest Destination) []Next
 	return nh
 }
 
-func (rt *routeTable) RemoveNextHop(vni VNI, dest Destination, nh NextHop, receivedFrom *metalBondPeer) error {
+func (rt *routeTable) RemoveNextHop(vni VNI, dest Destination, nh NextHop, receivedFrom *metalBondPeer) (error, int) {
 	rt.rwmtx.Lock()
 	defer rt.rwmtx.Unlock()
 
@@ -82,22 +82,23 @@ func (rt *routeTable) RemoveNextHop(vni VNI, dest Destination, nh NextHop, recei
 
 	// TODO Performance: reused found map pointers
 	if _, exists := rt.routes[vni]; !exists {
-		return fmt.Errorf("Nexthop does not exist")
+		return fmt.Errorf("Nexthop does not exist"), 0
 	}
 
 	if _, exists := rt.routes[vni][dest]; !exists {
-		return fmt.Errorf("Nexthop does not exist")
+		return fmt.Errorf("Nexthop does not exist"), 0
 	}
 
 	if _, exists := rt.routes[vni][dest][nh]; !exists {
-		return fmt.Errorf("Nexthop does not exist")
+		return fmt.Errorf("Nexthop does not exist"), 0
 	}
 
 	if _, exists := rt.routes[vni][dest][nh][receivedFrom]; !exists {
-		return fmt.Errorf("Nexthop does not exist")
+		return fmt.Errorf("Nexthop does not exist"), 0
 	}
 
 	delete(rt.routes[vni][dest][nh], receivedFrom)
+	left := len(rt.routes[vni][dest][nh])
 
 	if len(rt.routes[vni][dest][nh]) == 0 {
 		delete(rt.routes[vni][dest], nh)
@@ -111,7 +112,7 @@ func (rt *routeTable) RemoveNextHop(vni VNI, dest Destination, nh NextHop, recei
 		delete(rt.routes, vni)
 	}
 
-	return nil
+	return nil, left
 }
 
 func (rt *routeTable) AddNextHop(vni VNI, dest Destination, nh NextHop, receivedFrom *metalBondPeer) error {

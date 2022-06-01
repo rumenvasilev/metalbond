@@ -422,9 +422,11 @@ func (p *metalBondPeer) processRxUnsubscribe(msg msgUnsubscribe) {
 }
 
 func (p *metalBondPeer) processRxUpdate(msg msgUpdate) {
+	var err error
+
 	switch msg.Action {
 	case ADD:
-		err := p.receivedRoutes.AddNextHop(msg.VNI, msg.Destination, msg.NextHop, p)
+		err = p.receivedRoutes.AddNextHop(msg.VNI, msg.Destination, msg.NextHop, p)
 		if err != nil {
 			p.log().Errorf("Could not add received route to peer's receivedRoutes Table: %v", err)
 			return
@@ -432,10 +434,19 @@ func (p *metalBondPeer) processRxUpdate(msg msgUpdate) {
 
 		err = p.metalbond.addReceivedRoute(p, msg.VNI, msg.Destination, msg.NextHop)
 		if err != nil {
-			p.log().Errorf("Could not process received route UPDATE: %v", err)
+			p.log().Errorf("Could not process received route UPDATE ADD: %v", err)
 		}
 	case REMOVE:
-		p.log().Errorf("TODO: Implement UPDATE REMOVE!")
+		err, _ = p.receivedRoutes.RemoveNextHop(msg.VNI, msg.Destination, msg.NextHop, p)
+		if err != nil {
+			p.log().Errorf("Could not remove received route to peer's receivedRoutes Table: %v", err)
+			return
+		}
+
+		err = p.metalbond.removeReceivedRoute(p, msg.VNI, msg.Destination, msg.NextHop)
+		if err != nil {
+			p.log().Errorf("Could not process received route UPDATE REMOVE: %v", err)
+		}
 	default:
 		p.log().Errorf("Received UPDATE message with invalid action type!")
 	}

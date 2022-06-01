@@ -119,7 +119,7 @@ func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error 
 	m.peerMtx.RLock()
 	defer m.peerMtx.RUnlock()
 
-	err = m.distributeRouteToPeers(nil, vni, dest, hop)
+	err = m.distributeRouteToPeers(ADD, vni, dest, hop, nil)
 	if err != nil {
 		m.log().Errorf("Could not distribute route to peers: %v", err)
 	}
@@ -135,7 +135,7 @@ func (m *MetalBond) getMyAnnouncements() *routeTable {
 	return &m.myAnnouncements
 }
 
-func (m *MetalBond) distributeRouteToPeers(fromPeer *metalBondPeer, vni VNI, dest Destination, hop NextHop) error {
+func (m *MetalBond) distributeRouteToPeers(action UpdateAction, vni VNI, dest Destination, hop NextHop, fromPeer *metalBondPeer) error {
 	m.mtxSubscriptions.RLock()
 	defer m.mtxSubscriptions.RUnlock()
 	if _, exists := m.subscriptions[vni]; !exists {
@@ -154,6 +154,7 @@ func (m *MetalBond) distributeRouteToPeers(fromPeer *metalBondPeer, vni VNI, des
 		}
 
 		upd := msgUpdate{
+			Action:      action,
 			VNI:         vni,
 			Destination: dest,
 			NextHop:     hop,
@@ -176,20 +177,22 @@ func (m *MetalBond) addReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Dest
 
 	m.log().Infof("Received Route: VNI %d, Prefix: %s, NextHop: %s", vni, dest, hop)
 
-	m.distributeRouteToPeers(fromPeer, vni, dest, hop)
+	m.distributeRouteToPeers(ADD, vni, dest, hop, fromPeer)
 
 	return nil
 }
 
 func (m *MetalBond) removeReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Destination, hop NextHop) error {
-	err := m.routeTable.RemoveNextHop(vni, dest, hop, fromPeer)
+	err, remaining := m.routeTable.RemoveNextHop(vni, dest, hop, fromPeer)
 	if err != nil {
 		return fmt.Errorf("Cannot remove route from route table: %v", err)
 	}
 
 	m.log().Infof("Removed Received Route: VNI %d, Prefix: %s, NextHop: %s", vni, dest, hop)
 
-	// TODO: m.distributeRouteToPeers(fromPeer, vni, dest, hop)
+	if remaining == 0 {
+		m.distributeRouteToPeers(REMOVE, vni, dest, hop, fromPeer)
+	}
 
 	return nil
 }
