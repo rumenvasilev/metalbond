@@ -3,6 +3,7 @@ package metalbond
 import (
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/vishvananda/netlink"
 )
@@ -10,6 +11,7 @@ import (
 type NetlinkClient struct {
 	config    NetlinkClientConfig
 	tunDevice netlink.Link
+	mtx       sync.Mutex
 }
 
 type NetlinkClientConfig struct {
@@ -29,7 +31,10 @@ func NewNetlinkClient(config NetlinkClientConfig) (*NetlinkClient, error) {
 	}, nil
 }
 
-func (c NetlinkClient) AddRoute(vni VNI, dest Destination, hop NextHop) error {
+func (c *NetlinkClient) AddRoute(vni VNI, dest Destination, hop NextHop) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	table, exists := c.config.VNITableMap[vni]
 	if !exists {
 		return fmt.Errorf("No route table ID known for given VNI")
@@ -60,6 +65,9 @@ func (c NetlinkClient) AddRoute(vni VNI, dest Destination, hop NextHop) error {
 }
 
 func (c *NetlinkClient) RemoveRoute(vni VNI, dest Destination, hop NextHop) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	table, exists := c.config.VNITableMap[vni]
 	if !exists {
 		return fmt.Errorf("No route table ID known for given VNI")
