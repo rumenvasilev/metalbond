@@ -123,12 +123,13 @@ func (p *metalBondPeer) setState(newState ConnectionState) {
 		}
 		p.metalbond.mtxMySubscriptions.RUnlock()
 
-		for _, rt := range p.metalbond.getMyAnnouncements() {
-			for dest, hops := range rt.Routes {
-				for hop := range hops {
+		rt := p.metalbond.getMyAnnouncements()
+		for _, vni := range rt.GetVNIs() {
+			for dest, hops := range rt.GetDestinationsByVNI(vni) {
+				for _, hop := range hops {
 
 					upd := msgUpdate{
-						VNI:         rt.VNI,
+						VNI:         vni,
 						Destination: dest,
 						NextHop:     hop,
 					}

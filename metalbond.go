@@ -9,17 +9,10 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-type routeTable struct {
-	VNI    VNI
-	Routes map[Destination]map[NextHop]uint8
-}
-
 type MetalBond struct {
-	mtxRouteTables sync.RWMutex
-	routeTables    map[VNI]routeTable
+	routeTable routeTable
 
-	mtxMyAnnouncements sync.RWMutex
-	myAnnouncements    map[VNI]routeTable
+	myAnnouncements    routeTable
 	mtxMySubscriptions sync.RWMutex
 	mySubscriptions    map[VNI]bool
 
@@ -41,8 +34,6 @@ type MetalBond struct {
 
 func NewMetalBond(keepaliveInterval uint32) *MetalBond {
 	m := MetalBond{
-		routeTables:       map[VNI]routeTable{},
-		myAnnouncements:   make(map[VNI]routeTable),
 		mySubscriptions:   make(map[VNI]bool),
 		subscriptions:     make(map[VNI]map[*metalBondPeer]bool),
 		keepaliveInterval: keepaliveInterval,
@@ -117,30 +108,15 @@ func (m *MetalBond) Unsubscribe(vni VNI) error {
 func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error {
 	m.log().Infof("Announcing VNI %d: %s via %s", vni, dest, hop)
 
-	m.mtxMyAnnouncements.Lock()
-
-	if _, exists := m.myAnnouncements[vni]; !exists {
-		m.myAnnouncements[vni] = routeTable{
-			VNI:    vni,
-			Routes: make(map[Destination]map[NextHop]uint8),
-		}
+	err := m.myAnnouncements.AddNextHop(vni, dest, hop, nil)
+	if err != nil {
+		return fmt.Errorf("Cannot announce route: %v", err)
 	}
-
-	if _, exists := m.myAnnouncements[vni].Routes[dest]; !exists {
-		m.myAnnouncements[vni].Routes[dest] = make(map[NextHop]uint8)
-	}
-
-	if _, exists := m.myAnnouncements[vni].Routes[dest][hop]; exists {
-		return fmt.Errorf("Route already exists")
-	}
-	m.myAnnouncements[vni].Routes[dest][hop] = 1
-
-	m.mtxMyAnnouncements.Unlock()
 
 	m.peerMtx.RLock()
 	defer m.peerMtx.RUnlock()
 
-	err := m.distributeRouteToPeers(nil, vni, dest, hop)
+	err = m.distributeRouteToPeers(nil, vni, dest, hop)
 	if err != nil {
 		m.log().Errorf("Could not distribute route to peers: %v", err)
 	}
@@ -150,6 +126,10 @@ func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error 
 
 func (m *MetalBond) WithdrawRoute(vni VNI, dest Destination, hop NextHop) error {
 	return nil
+}
+
+func (m *MetalBond) getMyAnnouncements() *routeTable {
+	return &m.myAnnouncements
 }
 
 func (m *MetalBond) distributeRouteToPeers(fromPeer *metalBondPeer, vni VNI, dest Destination, hop NextHop) error {
@@ -185,44 +165,11 @@ func (m *MetalBond) distributeRouteToPeers(fromPeer *metalBondPeer, vni VNI, des
 	return nil
 }
 
-func (m *MetalBond) getMyAnnouncements() []routeTable {
-	t := []routeTable{}
-	m.mtxMyAnnouncements.RLock()
-	defer m.mtxMyAnnouncements.RUnlock()
-
-	for _, x := range m.myAnnouncements {
-		t = append(t, x)
-	}
-
-	return t
-}
-
 func (m *MetalBond) addReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Destination, hop NextHop) error {
-	m.mtxRouteTables.Lock()
-
-	if _, exists := m.routeTables[vni]; !exists {
-		m.routeTables[vni] = routeTable{
-			VNI:    vni,
-			Routes: make(map[Destination]map[NextHop]uint8),
-		}
+	err := m.routeTable.AddNextHop(vni, dest, hop, fromPeer)
+	if err != nil {
+		return fmt.Errorf("Cannot add route to route table: %v", err)
 	}
-
-	if _, exists := m.routeTables[vni].Routes[dest]; !exists {
-		m.routeTables[vni].Routes[dest] = make(map[NextHop]uint8)
-	}
-
-	// Increment number of received UPDATES for this route. So if one server goes down, this route is still valid as it also came over a second server.
-	m.routeTables[vni].Routes[dest][hop] += 1
-
-	// if new route and installRoutes == true
-	if m.routeTables[vni].Routes[dest][hop] == 1 && m.installRoutes == true {
-		err := m.installRoute(dest, hop)
-		if err != nil {
-			m.log().Errorf("Could not install route: %v", err)
-		}
-	}
-
-	m.mtxRouteTables.Unlock()
 
 	m.log().Infof("Received Route: VNI %d, Prefix: %s, NextHop: %s", vni, dest, hop)
 
@@ -250,13 +197,8 @@ func (m *MetalBond) addSubscriber(peer *metalBondPeer, vni VNI) error {
 
 	m.log().Infof("Peer %s added Subscription to VNI %d", peer, vni)
 
-	m.mtxRouteTables.RLock()
-	defer m.mtxRouteTables.RUnlock()
-	if _, exists := m.routeTables[vni]; !exists {
-		return nil
-	}
-	for dest, hops := range m.routeTables[vni].Routes {
-		for hop := range hops {
+	for dest, hops := range m.routeTable.GetDestinationsByVNI(vni) {
+		for _, hop := range hops {
 			err := peer.SendUpdate(msgUpdate{
 				Action:      ADD,
 				VNI:         vni,
