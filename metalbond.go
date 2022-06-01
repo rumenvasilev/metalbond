@@ -34,6 +34,8 @@ type MetalBond struct {
 
 func NewMetalBond(keepaliveInterval uint32) *MetalBond {
 	m := MetalBond{
+		routeTable:        newRouteTable(),
+		myAnnouncements:   newRouteTable(),
 		mySubscriptions:   make(map[VNI]bool),
 		subscriptions:     make(map[VNI]map[*metalBondPeer]bool),
 		keepaliveInterval: keepaliveInterval,

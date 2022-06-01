@@ -10,10 +10,15 @@ type routeTable struct {
 	routes map[VNI]map[Destination]map[NextHop]map[*metalBondPeer]bool
 }
 
+func newRouteTable() routeTable {
+	return routeTable{
+		routes: make(map[VNI]map[Destination]map[NextHop]map[*metalBondPeer]bool),
+	}
+}
+
 func (rt *routeTable) GetVNIs() []VNI {
 	rt.rwmtx.RLock()
 	defer rt.rwmtx.RUnlock()
-	rt.init()
 
 	vnis := []VNI{}
 	for k := range rt.routes {
@@ -22,16 +27,9 @@ func (rt *routeTable) GetVNIs() []VNI {
 	return vnis
 }
 
-func (rt *routeTable) init() {
-	if rt.routes == nil {
-		rt.routes = make(map[VNI]map[Destination]map[NextHop]map[*metalBondPeer]bool)
-	}
-}
-
 func (rt *routeTable) GetDestinationsByVNI(vni VNI) map[Destination][]NextHop {
 	rt.rwmtx.RLock()
 	defer rt.rwmtx.RUnlock()
-	rt.init()
 
 	ret := make(map[Destination][]NextHop)
 
@@ -55,7 +53,6 @@ func (rt *routeTable) GetDestinationsByVNI(vni VNI) map[Destination][]NextHop {
 func (rt *routeTable) GetNextHopsByDestination(vni VNI, dest Destination) []NextHop {
 	rt.rwmtx.RLock()
 	defer rt.rwmtx.RUnlock()
-	rt.init()
 
 	nh := []NextHop{}
 
@@ -78,7 +75,6 @@ func (rt *routeTable) GetNextHopsByDestination(vni VNI, dest Destination) []Next
 func (rt *routeTable) RemoveNextHop(vni VNI, dest Destination, nh NextHop, receivedFrom *metalBondPeer) error {
 	rt.rwmtx.Lock()
 	defer rt.rwmtx.Unlock()
-	rt.init()
 
 	if rt.routes == nil {
 		rt.routes = make(map[VNI]map[Destination]map[NextHop]map[*metalBondPeer]bool)
@@ -121,7 +117,6 @@ func (rt *routeTable) RemoveNextHop(vni VNI, dest Destination, nh NextHop, recei
 func (rt *routeTable) AddNextHop(vni VNI, dest Destination, nh NextHop, receivedFrom *metalBondPeer) error {
 	rt.rwmtx.Lock()
 	defer rt.rwmtx.Unlock()
-	rt.init()
 
 	// TODO Performance: reused found map pointers
 	if _, exists := rt.routes[vni]; !exists {
