@@ -15,9 +15,9 @@ run-client1: all
 		--keepalive 2 \
 		--subscribe 23 \
 		--announce 23#2001:db8:1::/48#2001:db8::cafe \
-		--announce 23#192.168.0.0/16#2001:db8::cafe \
-		--install-routes \
-		--tun ip6tnl0
+		--announce 23#192.168.0.0/16#2001:db8::cafe 
+		#--install-routes \
+		#--tun ip6tnl0
 
 run-client2: all
 	cd target && ./metalbond client \

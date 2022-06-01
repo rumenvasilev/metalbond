@@ -104,6 +104,7 @@ func (m *MetalBond) Subscribe(vni VNI) error {
 }
 
 func (m *MetalBond) Unsubscribe(vni VNI) error {
+	m.log().Errorf("Unsubscibe not implemented (VNI %d)", vni)
 	return nil
 }
 
@@ -180,6 +181,19 @@ func (m *MetalBond) addReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Dest
 	return nil
 }
 
+func (m *MetalBond) removeReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Destination, hop NextHop) error {
+	err := m.routeTable.RemoveNextHop(vni, dest, hop, fromPeer)
+	if err != nil {
+		return fmt.Errorf("Cannot remove route from route table: %v", err)
+	}
+
+	m.log().Infof("Removed Received Route: VNI %d, Prefix: %s, NextHop: %s", vni, dest, hop)
+
+	// TODO: m.distributeRouteToPeers(fromPeer, vni, dest, hop)
+
+	return nil
+}
+
 // addSubscriber is called by metalBondPeer when an SUBSCRIBE message has been received from the peer.
 // Route updates belonging to the specified VNI will be sent to the peer afterwards.
 func (m *MetalBond) addSubscriber(peer *metalBondPeer, vni VNI) error {
@@ -220,15 +234,6 @@ func (m *MetalBond) addSubscriber(peer *metalBondPeer, vni VNI) error {
 // removeSubscriber is called by metalBondPeer when an UNSUBSCRIBE message has been received from the peer.
 func (m *MetalBond) removeSubscriber(peer *metalBondPeer, vni VNI) error {
 	return fmt.Errorf("NOT IMPLEMENTED")
-}
-
-// cleanupPeer is called by metalBondPeer when connection is closed.
-// It will remove all peer's subscriptions and peer provided routes from MetalBond.
-func (m *MetalBond) cleanupPeer(p *metalBondPeer) error {
-	// Remove Subscriptions of peer
-	// Remove Routes learned by peer
-
-	return nil
 }
 
 // StartServer starts the MetalBond server asynchronously.

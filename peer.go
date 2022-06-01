@@ -18,8 +18,10 @@ type metalBondPeer struct {
 	direction  ConnectionDirection
 	isServer   bool
 
-	state     ConnectionState
-	stateLock sync.RWMutex
+	state          ConnectionState
+	stateLock      sync.RWMutex
+	receivedRoutes routeTable
+	subscribedVNIs map[VNI]bool
 
 	metalbond *MetalBond
 
@@ -49,6 +51,8 @@ func newMetalBondPeer(
 		remoteAddr:        remoteAddr,
 		direction:         direction,
 		state:             CONNECTING,
+		receivedRoutes:    newRouteTable(),
+		subscribedVNIs:    make(map[VNI]bool),
 		keepaliveInterval: keepaliveInterval,
 		metalbond:         metalbond,
 	}
@@ -159,6 +163,29 @@ func (p *metalBondPeer) log() *logrus.Entry {
 	return logrus.WithField("peer", p.remoteAddr).WithField("state", p.GetState().String())
 }
 
+func (p *metalBondPeer) cleanup() {
+	// unsubscribe from VNIs
+	for vni := range p.subscribedVNIs {
+		err := p.metalbond.Unsubscribe(vni)
+		if err != nil {
+			p.log().Errorf("Could not unsubscribe from VNI: %v", err)
+		}
+	}
+
+	// remove received routes from this peer from metalbond database
+	p.log().Infof("Removing all received nexthops from peer %s", p)
+	for _, vni := range p.receivedRoutes.GetVNIs() {
+		for dest, nhs := range p.receivedRoutes.GetDestinationsByVNI(vni) {
+			for _, nh := range nhs {
+				err := p.metalbond.removeReceivedRoute(p, vni, dest, nh)
+				if err != nil {
+					p.log().Errorf("Cannot remove received route from metalbond db: %v", err)
+				}
+			}
+		}
+	}
+}
+
 func (p *metalBondPeer) handle() {
 	p.wg.Add(1)
 	defer p.wg.Done()
@@ -177,6 +204,9 @@ func (p *metalBondPeer) handle() {
 
 		select {
 		case <-p.shutdown:
+			p.cleanup()
+
+			// exit handle() thread
 			return
 		default:
 			// proceed
@@ -226,7 +256,7 @@ func (p *metalBondPeer) handle() {
 			p.log().Debugf("Received UPDATE message")
 			p.processRxUpdate(msg)
 		case <-p.shutdown:
-			p.metalbond.cleanupPeer(p)
+			p.cleanup()
 			return
 		}
 	}
@@ -383,6 +413,7 @@ func (p *metalBondPeer) processRxKeepalive(msg msgKeepalive) {
 }
 
 func (p *metalBondPeer) processRxSubscribe(msg msgSubscribe) {
+	p.subscribedVNIs[msg.VNI] = true
 	p.metalbond.addSubscriber(p, msg.VNI)
 }
 
@@ -393,7 +424,13 @@ func (p *metalBondPeer) processRxUnsubscribe(msg msgUnsubscribe) {
 func (p *metalBondPeer) processRxUpdate(msg msgUpdate) {
 	switch msg.Action {
 	case ADD:
-		err := p.metalbond.addReceivedRoute(p, msg.VNI, msg.Destination, msg.NextHop)
+		err := p.receivedRoutes.AddNextHop(msg.VNI, msg.Destination, msg.NextHop, p)
+		if err != nil {
+			p.log().Errorf("Could not add received route to peer's receivedRoutes Table: %v", err)
+			return
+		}
+
+		err = p.metalbond.addReceivedRoute(p, msg.VNI, msg.Destination, msg.NextHop)
 		if err != nil {
 			p.log().Errorf("Could not process received route UPDATE: %v", err)
 		}
