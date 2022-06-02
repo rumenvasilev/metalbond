@@ -45,7 +45,6 @@ var CLI struct {
 		Verbose       bool     `help:"Enable debug logging" short:"v"`
 		InstallRoutes []string `help:"install routes via netlink. VNI to route table mapping (e.g. 23#100 installs routes of VNI 23 to route table 100)"`
 		Tun           string   `help:"ip6tnl tun device name"`
-		RouteTable    int      `help:"install routes into a specified table (e.g. when routes should be installed into a VRF)"`
 		Keepalive     uint32   `help:"Keepalive Interval"`
 		Http          string   `help:"HTTP Server listen address. e.g. [::]:4712"`
 	} `cmd:"" help:"Run MetalBond Client"`
