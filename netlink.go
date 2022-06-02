@@ -16,9 +16,10 @@ package metalbond
 
 import (
 	"fmt"
-	"github.com/vishvananda/netlink"
 	"net"
 	"sync"
+
+	"github.com/vishvananda/netlink"
 )
 
 const METALBOND_RT_PROTO netlink.RouteProtocol = 254

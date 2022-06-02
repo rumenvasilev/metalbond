@@ -39,17 +39,17 @@ type MetalBond struct {
 	keepaliveInterval uint32
 	shuttingDown      bool
 
-	client MetalBondClient
+	client Client
 
 	lis      *net.Listener // for server only
 	isServer bool
 }
 
-type MetalBondConfig struct {
+type Config struct {
 	KeepaliveInterval uint32
 }
 
-func NewMetalBond(config MetalBondConfig, client MetalBondClient) *MetalBond {
+func NewMetalBond(config Config, client Client) *MetalBond {
 	m := MetalBond{
 		routeTable:        newRouteTable(),
 		myAnnouncements:   newRouteTable(),
@@ -115,14 +115,16 @@ func (m *MetalBond) Subscribe(vni VNI) error {
 	m.mySubscriptions[vni] = true
 
 	for _, p := range m.peers {
-		p.Subscribe(vni)
+		if err := p.Subscribe(vni); err != nil {
+			m.log().Errorf("Could not subscribe to vni: %v", err)
+		}
 	}
 
 	return nil
 }
 
 func (m *MetalBond) Unsubscribe(vni VNI) error {
-	m.log().Errorf("Unsubscibe not implemented (VNI %d)", vni)
+	m.log().Errorf("Unsubscribe not implemented (VNI %d)", vni)
 	return nil
 }
 
@@ -137,8 +139,7 @@ func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error 
 	m.peerMtx.RLock()
 	defer m.peerMtx.RUnlock()
 
-	err = m.distributeRouteToPeers(ADD, vni, dest, hop, nil)
-	if err != nil {
+	if err := m.distributeRouteToPeers(ADD, vni, dest, hop, nil); err != nil {
 		m.log().Errorf("Could not distribute route to peers: %v", err)
 	}
 
@@ -195,11 +196,13 @@ func (m *MetalBond) addReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Dest
 
 	m.log().Infof("Received Route: VNI %d, Prefix: %s, NextHop: %s", vni, dest, hop)
 
-	m.distributeRouteToPeers(ADD, vni, dest, hop, fromPeer)
+	if err := m.distributeRouteToPeers(ADD, vni, dest, hop, fromPeer); err != nil {
+		m.log().Errorf("Could not distribute route to peers: %v", err)
+	}
 
 	err = m.client.AddRoute(vni, dest, hop)
 	if err != nil {
-		m.log().Errorf("MetalBondClient.AddRoute call failed: %v", err)
+		m.log().Errorf("Client.AddRoute call failed: %v", err)
 	}
 
 	return nil
@@ -214,12 +217,14 @@ func (m *MetalBond) removeReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest D
 	m.log().Infof("Removed Received Route: VNI %d, Prefix: %s, NextHop: %s", vni, dest, hop)
 
 	if remaining == 0 {
-		m.distributeRouteToPeers(REMOVE, vni, dest, hop, fromPeer)
+		if err := m.distributeRouteToPeers(REMOVE, vni, dest, hop, fromPeer); err != nil {
+			m.log().Errorf("Could not distribute route to peers: %v", err)
+		}
 	}
 
 	err = m.client.RemoveRoute(vni, dest, hop)
 	if err != nil {
-		m.log().Errorf("MetalBondClient.RemoveRoute call failed: %v", err)
+		m.log().Errorf("Client.RemoveRoute call failed: %v", err)
 	}
 
 	return nil
@@ -311,7 +316,9 @@ func (m *MetalBond) Shutdown() {
 	}
 
 	for p := range m.peers {
-		m.RemovePeer(p)
+		if err := m.RemovePeer(p); err != nil {
+			m.log().Errorf("Error removing peer %s: %v", p, err)
+		}
 	}
 }
 

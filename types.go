@@ -106,10 +106,10 @@ type MESSAGE_TYPE uint8
 
 const (
 	HELLO       MESSAGE_TYPE = 1
-	KEEPALIVE                = 2
-	SUBSCRIBE                = 3
-	UNSUBSCRIBE              = 4
-	UPDATE                   = 5
+	KEEPALIVE   MESSAGE_TYPE = 2
+	SUBSCRIBE   MESSAGE_TYPE = 3
+	UNSUBSCRIBE MESSAGE_TYPE = 4
+	UPDATE      MESSAGE_TYPE = 5
 )
 
 type UpdateAction uint8

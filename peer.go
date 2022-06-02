@@ -77,7 +77,7 @@ func newMetalBondPeer(
 }
 
 func (p *metalBondPeer) String() string {
-	return fmt.Sprintf("%s", p.remoteAddr)
+	return p.remoteAddr
 }
 
 func (p *metalBondPeer) GetState() ConnectionState {
@@ -119,7 +119,10 @@ func (p *metalBondPeer) SendUpdate(upd msgUpdate) error {
 		return fmt.Errorf("Connection not ESTABLISHED")
 	}
 
-	p.sendMessage(upd)
+	if err := p.sendMessage(upd); err != nil {
+		p.log().Errorf("Cannot send message: %v", err)
+		return err
+	}
 	return nil
 }
 
@@ -137,7 +140,9 @@ func (p *metalBondPeer) setState(newState ConnectionState) {
 	if oldState != newState && newState == ESTABLISHED {
 		p.metalbond.mtxMySubscriptions.RLock()
 		for sub := range p.metalbond.mySubscriptions {
-			p.Subscribe(sub)
+			if err := p.Subscribe(sub); err != nil {
+				p.log().Errorf("Cannot subscribe: %v", err)
+			}
 		}
 		p.metalbond.mtxMySubscriptions.RUnlock()
 
@@ -166,7 +171,9 @@ func (p *metalBondPeer) setState(newState ConnectionState) {
 		for vni, peers := range p.metalbond.subscriptions {
 			for peer := range peers {
 				if p == peer {
-					p.metalbond.removeSubscriber(p, vni)
+					if err := p.metalbond.removeSubscriber(p, vni); err != nil {
+						p.log().Errorf("Cannot remove subscriber: %v", err)
+					}
 				}
 			}
 		}
@@ -191,8 +198,7 @@ func (p *metalBondPeer) cleanup() {
 	for _, vni := range p.receivedRoutes.GetVNIs() {
 		for dest, nhs := range p.receivedRoutes.GetDestinationsByVNI(vni) {
 			for _, nh := range nhs {
-				err := p.metalbond.removeReceivedRoute(p, vni, dest, nh)
-				if err != nil {
+				if err := p.metalbond.removeReceivedRoute(p, vni, dest, nh); err != nil {
 					p.log().Errorf("Cannot remove received route from metalbond db: %v", err)
 				}
 			}
@@ -244,7 +250,9 @@ func (p *metalBondPeer) handle() {
 			KeepaliveInterval: p.keepaliveInterval,
 		}
 
-		p.sendMessage(helloMsg)
+		if err := p.sendMessage(helloMsg); err != nil {
+			p.log().Errorf("Failed to send message: %v", err)
+		}
 		p.setState(HELLO_SENT)
 	}
 
@@ -397,7 +405,9 @@ func (p *metalBondPeer) processRxHello(msg msgHello) {
 			IsServer:          p.metalbond.isServer,
 		}
 
-		p.sendMessage(helloMsg)
+		if err := p.sendMessage(helloMsg); err != nil {
+			p.log().Errorf("Failed to send message: %v", err)
+		}
 		p.setState(HELLO_SENT)
 		p.log().Infof("HELLO message sent")
 	}
@@ -422,17 +432,23 @@ func (p *metalBondPeer) processRxKeepalive(msg msgKeepalive) {
 
 	// The server must respond incoming KEEPALIVE messages with an own KEEPALIVE message.
 	if p.direction == INCOMING {
-		p.sendMessage(msgKeepalive{})
+		if err := p.sendMessage(msgKeepalive{}); err != nil {
+			p.log().Errorf("Failed to send message: %v", err)
+		}
 	}
 }
 
 func (p *metalBondPeer) processRxSubscribe(msg msgSubscribe) {
 	p.subscribedVNIs[msg.VNI] = true
-	p.metalbond.addSubscriber(p, msg.VNI)
+	if err := p.metalbond.addSubscriber(p, msg.VNI); err != nil {
+		p.log().Errorf("Failed to add subscriber: %v", err)
+	}
 }
 
 func (p *metalBondPeer) processRxUnsubscribe(msg msgUnsubscribe) {
-	p.metalbond.removeSubscriber(p, msg.VNI)
+	if err := p.metalbond.removeSubscriber(p, msg.VNI); err != nil {
+		p.log().Errorf("Failed to remove subscriber: %v", err)
+	}
 }
 
 func (p *metalBondPeer) processRxUpdate(msg msgUpdate) {
@@ -482,7 +498,9 @@ func (p *metalBondPeer) Reset() {
 
 	switch p.direction {
 	case INCOMING:
-		p.metalbond.RemovePeer(p.remoteAddr)
+		if err := p.metalbond.RemovePeer(p.remoteAddr); err != nil {
+			p.log().Errorf("Failed to remove peer: %v", err)
+		}
 	case OUTGOING:
 		p.log().Infof("Resetting connection...")
 		p.setState(RETRY)
@@ -515,7 +533,9 @@ func (p *metalBondPeer) keepaliveLoop() {
 
 	// Sending initial KEEPALIVE message
 	if p.direction == OUTGOING {
-		p.sendMessage(msgKeepalive{})
+		if err := p.sendMessage(msgKeepalive{}); err != nil {
+			p.log().Errorf("Failed to send message: %v", err)
+		}
 	}
 
 	for {
@@ -523,7 +543,9 @@ func (p *metalBondPeer) keepaliveLoop() {
 		// Ticker triggers sending KEEPALIVE messages
 		case <-tckr.C:
 			if p.direction == OUTGOING {
-				p.sendMessage(msgKeepalive{})
+				if err := p.sendMessage(msgKeepalive{}); err != nil {
+					p.log().Errorf("Failed to send message: %v", err)
+				}
 			}
 
 		// Timer detects KEEPALIVE timeouts

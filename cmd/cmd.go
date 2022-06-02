@@ -15,6 +15,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"runtime"
@@ -67,17 +68,21 @@ func main() {
 			log.SetLevel(log.DebugLevel)
 		}
 
-		config := metalbond.MetalBondConfig{
+		config := metalbond.Config{
 			KeepaliveInterval: CLI.Server.Keepalive,
 		}
 
 		client := metalbond.NewDummyClient()
 		m := metalbond.NewMetalBond(config, client)
 		if len(CLI.Server.Http) > 0 {
-			m.StartHTTPServer(CLI.Server.Http)
+			if err := m.StartHTTPServer(CLI.Server.Http); err != nil {
+				panic(fmt.Errorf("failed to start http server: %v", err))
+			}
 		}
 
-		m.StartServer(CLI.Server.Listen)
+		if err := m.StartServer(CLI.Server.Listen); err != nil {
+			panic(fmt.Errorf("failed to start server: %v", err))
+		}
 
 		// Wait for SIGINTs
 		cint := make(chan os.Signal, 1)
@@ -95,11 +100,11 @@ func main() {
 			log.SetLevel(log.DebugLevel)
 		}
 
-		config := metalbond.MetalBondConfig{
+		config := metalbond.Config{
 			KeepaliveInterval: CLI.Client.Keepalive,
 		}
 
-		var client metalbond.MetalBondClient
+		var client metalbond.Client
 		if len(CLI.Client.InstallRoutes) > 0 {
 			vnitablemap := map[metalbond.VNI]int{}
 			for _, mapping := range CLI.Client.InstallRoutes {
@@ -136,11 +141,15 @@ func main() {
 
 		m := metalbond.NewMetalBond(config, client)
 		if len(CLI.Client.Http) > 0 {
-			m.StartHTTPServer(CLI.Client.Http)
+			if err := m.StartHTTPServer(CLI.Client.Http); err != nil {
+				panic(fmt.Errorf("failed to start http server: %v", err))
+			}
 		}
 
 		for _, server := range CLI.Client.Server {
-			m.AddPeer(server)
+			if err := m.AddPeer(server); err != nil {
+				panic(fmt.Errorf("failed to add server: %v", err))
+			}
 		}
 
 		for _, subscription := range CLI.Client.Subscribe {
@@ -189,7 +198,9 @@ func main() {
 				NAT:           false,
 			}
 
-			m.AnnounceRoute(metalbond.VNI(vni), dest, hop)
+			if err := m.AnnounceRoute(metalbond.VNI(vni), dest, hop); err != nil {
+				log.Fatalf("failed to announce route: %v", err)
+			}
 		}
 
 		// Wait for SIGINTs
