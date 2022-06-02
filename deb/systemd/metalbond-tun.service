@@ -1,0 +1,16 @@
+[Unit]
+Description=MetalBond Client
+After=network.target
+Before=metalbond-client.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/metalbond
+ExecStart=ip link add overlay-tun type ip6tnl mode any external ttl 32
+ExecStart=ip link set mtu 1500 dev overlay-tun
+ExecStart=ip link set vrf vrf-internet dev overlay-tun
+ExecStart=ip link set up dev overlay-tun
+ExecStart=ethtool -K overlay-tun rx off tx off
+
+[Install]
+WantedBy=multi-user.target

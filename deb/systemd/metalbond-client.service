@@ -1,0 +1,13 @@
+[Unit]
+Description=MetalBond Tun Device Setup
+After=network.target
+
+[Service]
+Type=once
+WorkingDirectory=/opt/metalbond
+ExecStart=/opt/metalbond/bin/metalbond client --server [::1]:4711 --keepalive 5 --announce 123#2001:db8:dead:beef::/64#2001:db8::1
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+#!/bin/bash
+
+if ! grep -q 254 "/etc/iproute2/rt_protos"; then
+    echo -e "254\tmetalbond" >> "/etc/iproute2/rt_protos"
+fi
+
+chown -R metalbond:metalbond /opt/metalbond

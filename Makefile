@@ -1,3 +1,5 @@
+METALBOND_VERSION := 0.1.0
+
 all:
 	mkdir -p target
 	rm -rf target/html && cp -ra html target
@@ -43,6 +45,9 @@ clean:
 
 docker:
 	docker build -t onmetal/metalbond .
+
+deb: all
+	docker run -it --rm -v "$(PWD):/workdir" -e "METALBOND_VERSION=$(METALBOND_VERSION)" golang:1.18-bullseye bash -c "cd /workdir && deb/make-deb.sh"
 
 unit-test:
 	go test -v

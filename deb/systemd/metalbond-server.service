@@ -1,0 +1,14 @@
+[Unit]
+Description=MetalBond Server
+After=network.target
+
+[Service]
+Type=simple
+User=metalbond
+WorkingDirectory=/opt/metalbond
+ExecStart=/opt/metalbond/bin/metalbond server --listen [::]:4711 --http [::1]:4712 --keepalive 5
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
