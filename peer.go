@@ -384,6 +384,11 @@ func (p *metalBondPeer) rxLoop() {
 }
 
 func (p *metalBondPeer) processRxHello(msg msgHello) {
+	if msg.KeepaliveInterval < 1 {
+		p.log().Errorf("Keepalive Interval too low (%d)", msg.KeepaliveInterval)
+		p.Reset()
+	}
+
 	// Use lower Keepalive interval of both client and server as peer config
 	p.isServer = msg.IsServer
 	keepaliveInterval := p.keepaliveInterval

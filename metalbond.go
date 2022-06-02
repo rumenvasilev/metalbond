@@ -50,6 +50,10 @@ type Config struct {
 }
 
 func NewMetalBond(config Config, client Client) *MetalBond {
+	if config.KeepaliveInterval == 0 {
+		config.KeepaliveInterval = 5
+	}
+
 	m := MetalBond{
 		routeTable:        newRouteTable(),
 		myAnnouncements:   newRouteTable(),
