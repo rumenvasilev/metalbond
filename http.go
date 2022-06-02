@@ -34,7 +34,7 @@ type jsonServer struct {
 	m *MetalBond
 }
 
-func serveJsonRouteTable(m *MetalBond, listen string) error {
+func serveJsonRouteTable(m *MetalBond, listen string) {
 	js := jsonServer{
 		m: m,
 	}
@@ -43,9 +43,11 @@ func serveJsonRouteTable(m *MetalBond, listen string) error {
 	http.HandleFunc("/routes.json", js.jsonHandler)
 	http.HandleFunc("/routes.yaml", js.yamlHandler)
 
-	http.ListenAndServe(listen, nil)
-
-	return nil
+	if err := http.ListenAndServe(listen, nil); err != nil {
+		if m != nil {
+			m.log().Errorf("Failed to list and serve: %v", err)
+		}
+	}
 }
 
 func (j *jsonServer) getJsonRoutes() (jsonRoutes, error) {
@@ -106,7 +108,10 @@ func (j *jsonServer) jsonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Content-Type", "application/json")
-	w.Write(out)
+	_, err = w.Write(out)
+	if err != nil {
+		fmt.Fprintf(w, "Error: %v", err)
+	}
 }
 
 func (j *jsonServer) yamlHandler(w http.ResponseWriter, r *http.Request) {
@@ -125,5 +130,8 @@ func (j *jsonServer) yamlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Content-Type", "text/yaml")
-	w.Write(out)
+	_, err = w.Write(out)
+	if err != nil {
+		fmt.Fprintf(w, "Error: %v", err)
+	}
 }

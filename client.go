@@ -14,7 +14,7 @@
 
 package metalbond
 
-type MetalBondClient interface {
+type Client interface {
 	AddRoute(vni VNI, dest Destination, nexthop NextHop) error
 	RemoveRoute(vni VNI, dest Destination, nexthop NextHop) error
 }
