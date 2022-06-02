@@ -5,7 +5,7 @@ WORKDIR /workspace
 COPY . .
 RUN make
 
-FROM debian:bookworm-slim
+FROM debian:bullseye-slim
 WORKDIR /opt/metalbond
 
 COPY --from=builder /workspace/target/metalbond /opt/metalbond/bin/metalbond
