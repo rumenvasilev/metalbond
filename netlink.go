@@ -21,6 +21,8 @@ import (
 	"sync"
 )
 
+const METALBOND_RT_PROTO netlink.RouteProtocol = 254
+
 type NetlinkClient struct {
 	config    NetlinkClientConfig
 	tunDevice netlink.Link
@@ -37,6 +39,9 @@ func NewNetlinkClient(config NetlinkClientConfig) (*NetlinkClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Cannot find tun device '%s': %v", config.LinkName, err)
 	}
+
+	// TODO: Remove all routes from route tables defined in config.VNITableMap with Protocol = METALBOND_RT_PROTO
+	// to clean up old, stale routes installed by a prior metalbond client instance
 
 	return &NetlinkClient{
 		config:    config,
@@ -68,6 +73,7 @@ func (c *NetlinkClient) AddRoute(vni VNI, dest Destination, hop NextHop) error {
 		Dst:       dst,
 		Encap:     &encap,
 		Table:     table,
+		Protocol:  METALBOND_RT_PROTO,
 	} // by default, the route is already installed into the kernel table without explicite specification
 
 	if err := netlink.RouteAdd(route); err != nil {
@@ -101,6 +107,7 @@ func (c *NetlinkClient) RemoveRoute(vni VNI, dest Destination, hop NextHop) erro
 		Dst:       dst,
 		Encap:     &encap,
 		Table:     table,
+		Protocol:  METALBOND_RT_PROTO,
 	} // by default, the route is already installed into the kernel table without explicite specification
 
 	if err := netlink.RouteDel(route); err != nil {
