@@ -2,5 +2,5 @@ Package: metalbond
 Version: METALBOND_VERSION
 Maintainer: Malte Janduda
 Architecture: amd64
-Depends: iproute2, systemd, libc6 (>=2.33)
+Depends: libc6 (>=2.33)
 Description: MetalBond Client and Server
