@@ -60,9 +60,10 @@ To install routes on a Linux system, you first need to create an IP-in-IPv6 tunn
     ip link add overlay-tun type ip6tnl mode any external
     ip link set up dev overlay-tun
 
-and then start the metalbond client with the `--install-routes` command line parameter. Set the tunnel device using the `tun` parameter:
+and then start the metalbond client with the `--install-routes` command line parameter. This parameter requires a mapping between VNI and Kernel route table IDs. E.g. if you want to write all routes associated with VNI 23 to the Kernel route table 100, set `--install-routes 23#100`.
+Set the tunnel device using the `tun` parameter:
 
-    ./metalbond client --install-routes --tun ip6tnl0
+    ./metalbond client --install-routes 23#100 --tun overlay-tun
 
 License
 -------
