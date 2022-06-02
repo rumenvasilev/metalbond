@@ -8,6 +8,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var METALBOND_VERSION = "v0.1"
+
 type MetalBond struct {
 	routeTable routeTable
 
