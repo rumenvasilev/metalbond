@@ -40,3 +40,9 @@ proto:
 
 clean:
 	rm -rf target
+
+docker:
+	docker build -t onmetal/metalbond .
+
+unit-test:
+	go test -v
