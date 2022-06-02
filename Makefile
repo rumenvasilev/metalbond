@@ -16,7 +16,7 @@ run-client1: all
 		--subscribe 23 \
 		--announce 23#2001:db8:1::/48#2001:db8::cafe \
 		--announce 23#192.168.0.0/16#2001:db8::cafe \
-		--install-routes \
+		--install-routes 23#100 \
 		--tun overlay-tun
 
 run-client2: all

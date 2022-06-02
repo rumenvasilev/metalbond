@@ -28,7 +28,7 @@ var CLI struct {
 		Subscribe     []uint32 `help:"Subscribe to VNIs"`
 		Announce      []string `help:"Announce Prefixes in VNIs (e.g. 23#10.0.23.0/24#2001:db8::1)"`
 		Verbose       bool     `help:"Enable debug logging" short:"v"`
-		InstallRoutes bool     `help:"install routes via netlink"`
+		InstallRoutes []string `help:"install routes via netlink. VNI to route table mapping (e.g. 23#100 installs routes of VNI 23 to route table 100)"`
 		Tun           string   `help:"ip6tnl tun device name"`
 		RouteTable    int      `help:"install routes into a specified table (e.g. when routes should be installed into a VRF)"`
 		Keepalive     uint32   `help:"Keepalive Interval"`
@@ -86,12 +86,32 @@ func main() {
 		}
 
 		var client metalbond.MetalBondClient
-		if CLI.Client.InstallRoutes {
+		if len(CLI.Client.InstallRoutes) > 0 {
+			vnitablemap := map[metalbond.VNI]int{}
+			for _, mapping := range CLI.Client.InstallRoutes {
+				parts := strings.Split(mapping, "#")
+				if len(parts) != 2 {
+					log.Fatalf("malformed VNI Table mapping: %s", mapping)
+				}
+
+				vni, err := strconv.ParseInt(parts[0], 10, 24)
+				if err != nil {
+					log.Fatalf("cannot parse VNI: %s", parts[0])
+				}
+
+				table, err := strconv.ParseInt(parts[1], 10, 24)
+				if err != nil {
+					log.Fatalf("cannot parse table: %s", parts[1])
+				}
+
+				vnitablemap[metalbond.VNI(vni)] = int(table)
+			}
+
+			log.Infof("VNI to Route Table mapping: %v", vnitablemap)
+
 			client, err = metalbond.NewNetlinkClient(metalbond.NetlinkClientConfig{
-				VNITableMap: map[metalbond.VNI]int{
-					23: 23,
-				},
-				LinkName: CLI.Client.Tun,
+				VNITableMap: vnitablemap,
+				LinkName:    CLI.Client.Tun,
 			})
 			if err != nil {
 				log.Fatalf("Cannot create MetalBond Client: %v", err)
@@ -123,8 +143,8 @@ func main() {
 			}
 
 			vni, err := strconv.ParseInt(parts[0], 10, 24)
-			if len(parts) != 3 {
-				log.Fatalf("invalid VNI: %s", parts[0])
+			if err != nil {
+				log.Fatalf("invalid VNI: %s", parts[1])
 			}
 
 			prefix, err := netip.ParsePrefix(parts[1])
