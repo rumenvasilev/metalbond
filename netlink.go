@@ -33,6 +33,7 @@ type NetlinkClient struct {
 type NetlinkClientConfig struct {
 	VNITableMap map[VNI]int
 	LinkName    string
+	IPv4Only    bool
 }
 
 func NewNetlinkClient(config NetlinkClientConfig) (*NetlinkClient, error) {
@@ -53,6 +54,10 @@ func NewNetlinkClient(config NetlinkClientConfig) (*NetlinkClient, error) {
 func (c *NetlinkClient) AddRoute(vni VNI, dest Destination, hop NextHop) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
+
+	if c.config.IPv4Only && dest.IPVersion == IPV6 {
+		return nil
+	}
 
 	table, exists := c.config.VNITableMap[vni]
 	if !exists {
@@ -87,6 +92,10 @@ func (c *NetlinkClient) AddRoute(vni VNI, dest Destination, hop NextHop) error {
 func (c *NetlinkClient) RemoveRoute(vni VNI, dest Destination, hop NextHop) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
+
+	if c.config.IPv4Only && dest.IPVersion == IPV6 {
+		return nil
+	}
 
 	table, exists := c.config.VNITableMap[vni]
 	if !exists {

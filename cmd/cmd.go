@@ -45,6 +45,7 @@ var CLI struct {
 		Verbose       bool     `help:"Enable debug logging" short:"v"`
 		InstallRoutes []string `help:"install routes via netlink. VNI to route table mapping (e.g. 23#100 installs routes of VNI 23 to route table 100)"`
 		Tun           string   `help:"ip6tnl tun device name"`
+		IPv4only      bool     `help:"Receive only IPv4 routes" name:"ipv4-only"`
 		Keepalive     uint32   `help:"Keepalive Interval"`
 		Http          string   `help:"HTTP Server listen address. e.g. [::]:4712"`
 	} `cmd:"" help:"Run MetalBond Client"`
@@ -130,6 +131,7 @@ func main() {
 			client, err = metalbond.NewNetlinkClient(metalbond.NetlinkClientConfig{
 				VNITableMap: vnitablemap,
 				LinkName:    CLI.Client.Tun,
+				IPv4Only:    CLI.Client.IPv4only,
 			})
 			if err != nil {
 				log.Fatalf("Cannot create MetalBond Client: %v", err)
