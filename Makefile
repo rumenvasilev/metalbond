@@ -36,7 +36,7 @@ run-client2: all
 		--announce 23#2001:db8:4::/48#2001:db8::4c:beef \
 		--announce 42#10.0.0.0/8#2001:db8::beef
 
-.PHONY: proto
+.PHONY: proto deb
 proto:
 	protoc -I ./pb --go_out=. ./pb/metalbond.proto
 
@@ -46,7 +46,7 @@ clean:
 docker:
 	docker build -t onmetal/metalbond .
 
-deb: all
+deb:
 	docker run -it --rm -v "$(PWD):/workdir" -e "METALBOND_VERSION=$(METALBOND_VERSION)" golang:1.18-bullseye bash -c "cd /workdir && deb/make-deb.sh"
 
 unit-test:
