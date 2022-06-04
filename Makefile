@@ -1,4 +1,4 @@
-METALBOND_VERSION := 0.1.1
+METALBOND_VERSION := 0.1.2
 
 all:
 	mkdir -p target

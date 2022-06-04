@@ -211,9 +211,9 @@ func (msg msgUpdate) Serialize() ([]byte, error) {
 
 	switch msg.Destination.IPVersion {
 	case IPV4:
-		msg.Destination.IPVersion = IPVersion(pb.IPVersion_IPv4)
+		pbmsg.Destination.IpVersion = pb.IPVersion_IPv4
 	case IPV6:
-		msg.Destination.IPVersion = IPVersion(pb.IPVersion_IPv6)
+		pbmsg.Destination.IpVersion = pb.IPVersion_IPv6
 	default:
 		return nil, fmt.Errorf("Invalid Destination IP version")
 	}

@@ -19,6 +19,7 @@ import (
 	"net"
 	"sync"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
 
@@ -55,7 +56,8 @@ func (c *NetlinkClient) AddRoute(vni VNI, dest Destination, hop NextHop) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
-	if c.config.IPv4Only && dest.IPVersion == IPV6 {
+	if c.config.IPv4Only && dest.IPVersion != IPV4 {
+		log.Infof("Received non-IPv4 route will not be installed in kernel route table (IPv4-only mode)")
 		return nil
 	}
 
@@ -93,7 +95,7 @@ func (c *NetlinkClient) RemoveRoute(vni VNI, dest Destination, hop NextHop) erro
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
-	if c.config.IPv4Only && dest.IPVersion == IPV6 {
+	if c.config.IPv4Only && dest.IPVersion != IPV4 {
 		return nil
 	}
 
