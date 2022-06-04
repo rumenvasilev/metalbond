@@ -5,7 +5,13 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/metalbond
-ExecStart=/opt/metalbond/bin/metalbond client --server [::1]:4711 --keepalive 5 --announce 123#2001:db8:dead:beef::/64#2001:db8::1
+ExecStart=/opt/metalbond/bin/metalbond client \
+    --server [::1]:4711 \
+    --keepalive 5 \
+    --announce 123#2001:db8:dead:beef::/64#2001:db8::1
+    --announce 123#10.0.23.42/32#2001:db8::1
+    --install-routes 123#0
+    --tun overlay-tun
 Restart=always
 RestartSec=3
 

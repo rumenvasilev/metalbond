@@ -8,8 +8,19 @@ Type=oneshot
 WorkingDirectory=/opt/metalbond
 ExecStart=ip link add overlay-tun type ip6tnl mode any external ttl 32
 ExecStart=ip link set mtu 1500 dev overlay-tun
-ExecStart=ip link set vrf vrf-internet dev overlay-tun
+
+# If you want to route traffic between a VRF and the overlay:
+# ExecStart=ip link set vrf vrf-internet dev overlay-tun
+
+# If this server should be available via the tunnel, add an IP address to the tunnel interface.
+# Don't forget to also announce the IP addresses via metalbond-client!
+ExecStart=ip addr add 10.0.23.42/32 dev overlay-tun
+ExecStart=ip addr add 2001:db8:dead:beef::1/128 dev overlay-tun
+
+
 ExecStart=ip link set up dev overlay-tun
+
+# Disable (most often not supported) hardware offloading for traffic that goes into the tunnel:
 ExecStart=ethtool -K overlay-tun rx off tx off
 
 [Install]
