@@ -161,6 +161,24 @@ func (m *MetalBond) getMyAnnouncements() *routeTable {
 func (m *MetalBond) distributeRouteToPeers(action UpdateAction, vni VNI, dest Destination, hop NextHop, fromPeer *metalBondPeer) error {
 	m.mtxSubscriptions.RLock()
 	defer m.mtxSubscriptions.RUnlock()
+
+	if fromPeer == nil {
+		for _, sp := range m.peers {
+			upd := msgUpdate{
+				Action:      action,
+				VNI:         vni,
+				Destination: dest,
+				NextHop:     hop,
+			}
+
+			err := sp.SendUpdate(upd)
+			if err != nil {
+				m.log().WithField("peer", sp).Debugf("Could not send update to peer: %v", err)
+			}
+		}
+		return nil
+	}
+
 	if _, exists := m.subscriptions[vni]; !exists {
 		return nil
 	}
