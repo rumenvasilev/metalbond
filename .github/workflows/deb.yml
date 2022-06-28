@@ -1,0 +1,15 @@
+name: build and upload deb package
+on: push
+jobs:
+  deb:
+    if: startsWith(github.event.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: build deb package
+        run: make deb
+      - name: upload deb package as action artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: metalbond
+          path: target/metalbond*.deb
