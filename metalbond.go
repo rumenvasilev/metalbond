@@ -27,15 +27,17 @@ var METALBOND_VERSION = "0.1.5"
 type MetalBond struct {
 	routeTable routeTable
 
-	myAnnouncements    routeTable
+	myAnnouncements routeTable
+
 	mtxMySubscriptions sync.RWMutex
 	mySubscriptions    map[VNI]bool
 
 	mtxSubscriptions sync.RWMutex                    // this locks a bit much (all VNIs). We could create a mutex for every VNI instead.
 	subscriptions    map[VNI]map[*metalBondPeer]bool // HashMap of HashSet
 
-	peers             map[string]*metalBondPeer
-	peerMtx           sync.RWMutex
+	mtxPeers sync.RWMutex
+	peers    map[string]*metalBondPeer
+
 	keepaliveInterval uint32
 	shuttingDown      bool
 
@@ -74,8 +76,8 @@ func (m *MetalBond) StartHTTPServer(listen string) error {
 }
 
 func (m *MetalBond) AddPeer(addr string) error {
-	m.peerMtx.Lock()
-	defer m.peerMtx.Unlock()
+	m.mtxPeers.Lock()
+	defer m.mtxPeers.Unlock()
 
 	m.log().Infof("Adding peer %s", addr)
 	if _, exists := m.peers[addr]; exists {
@@ -93,8 +95,8 @@ func (m *MetalBond) AddPeer(addr string) error {
 }
 
 func (m *MetalBond) RemovePeer(addr string) error {
-	m.peerMtx.Lock()
-	defer m.peerMtx.Unlock()
+	m.mtxPeers.Lock()
+	defer m.mtxPeers.Unlock()
 
 	m.log().Infof("Removing peer %s", addr)
 	if _, exists := m.peers[addr]; !exists {
@@ -140,8 +142,8 @@ func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error 
 		return fmt.Errorf("Cannot announce route: %v", err)
 	}
 
-	m.peerMtx.RLock()
-	defer m.peerMtx.RUnlock()
+	m.mtxPeers.RLock()
+	defer m.mtxPeers.RUnlock()
 
 	if err := m.distributeRouteToPeers(ADD, vni, dest, hop, nil); err != nil {
 		m.log().Errorf("Could not distribute route to peers: %v", err)
@@ -163,8 +165,8 @@ func (m *MetalBond) WithdrawRoute(vni VNI, dest Destination, hop NextHop) error 
 	// the logic, regarding when/how nexthops or entire routes are removed from metalbond under the cases in which withdrawing or receiving deleting route messages,
 	// should be double-checked.
 	if remaining == 0 {
-		m.peerMtx.RLock()
-		defer m.peerMtx.RUnlock()
+		m.mtxPeers.RLock()
+		defer m.mtxPeers.RUnlock()
 
 		if err := m.distributeRouteToPeers(REMOVE, vni, dest, hop, nil); err != nil {
 			m.log().Errorf("could not distribute route to peers: %v", err)
