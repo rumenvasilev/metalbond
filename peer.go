@@ -32,8 +32,8 @@ type metalBondPeer struct {
 	direction  ConnectionDirection
 	isServer   bool
 
-	state    ConnectionState
 	mtxState sync.RWMutex
+	state    ConnectionState
 
 	receivedRoutes routeTable
 	subscribedVNIs map[VNI]bool
@@ -199,6 +199,12 @@ func (p *metalBondPeer) cleanup() {
 	for _, vni := range p.receivedRoutes.GetVNIs() {
 		for dest, nhs := range p.receivedRoutes.GetDestinationsByVNI(vni) {
 			for _, nh := range nhs {
+				err, _ := p.receivedRoutes.RemoveNextHop(vni, dest, nh, p)
+				if err != nil {
+					p.log().Errorf("Could not remove received route from peer's receivedRoutes Table: %v", err)
+					return
+				}
+
 				if err := p.metalbond.removeReceivedRoute(p, vni, dest, nh); err != nil {
 					p.log().Errorf("Cannot remove received route from metalbond db: %v", err)
 				}
@@ -464,7 +470,7 @@ func (p *metalBondPeer) processRxUpdate(msg msgUpdate) {
 	case ADD:
 		err = p.receivedRoutes.AddNextHop(msg.VNI, msg.Destination, msg.NextHop, p)
 		if err != nil {
-			p.log().Errorf("Could not add received route to peer's receivedRoutes Table: %v", err)
+			p.log().Errorf("Could not add received route (%v -> %v) to peer's receivedRoutes Table: %v", msg.Destination, msg.NextHop, err)
 			return
 		}
 
@@ -475,7 +481,7 @@ func (p *metalBondPeer) processRxUpdate(msg msgUpdate) {
 	case REMOVE:
 		err, _ = p.receivedRoutes.RemoveNextHop(msg.VNI, msg.Destination, msg.NextHop, p)
 		if err != nil {
-			p.log().Errorf("Could not remove received route to peer's receivedRoutes Table: %v", err)
+			p.log().Errorf("Could not remove received route from peer's receivedRoutes Table: %v", err)
 			return
 		}
 

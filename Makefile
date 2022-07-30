@@ -1,4 +1,4 @@
-METALBOND_VERSION := 0.1.5
+METALBOND_VERSION := 0.1.6
 
 all:
 	mkdir -p target
@@ -21,13 +21,21 @@ run-client1: all
 		--install-routes 23#100 \
 		--tun overlay-tun
 
+run-client1b: all
+	cd target && ./metalbond client \
+		--server [::1]:4711 \
+		--keepalive 2 \
+		--subscribe 23 \
+		--announce 23#2001:db8:1::/48#2001:db8::cafe \
+		--announce 23#192.168.0.0/16#2001:db8::cafe
+
 run-client2: all
 	cd target && ./metalbond client \
 		--server [::1]:4711 \
 		--keepalive 2 \
 		--subscribe 23 \
 		--subscribe 42 \
-		--announce 23#2001:db8:1::/48#2001:db8::cafe \
+		--announce 23#2001:db8:1::/48#2001:db8::cafb \
 		--announce 23#2001:db8:2::/48#2001:db8::2:beef \
 		--announce 23#2001:db8:3::/48#2001:db8::3:beef \
 		--announce 23#2001:db8:4::/48#2001:db8::4:beef \
