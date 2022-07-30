@@ -32,8 +32,9 @@ type metalBondPeer struct {
 	direction  ConnectionDirection
 	isServer   bool
 
-	state          ConnectionState
-	stateLock      sync.RWMutex
+	state    ConnectionState
+	mtxState sync.RWMutex
+
 	receivedRoutes routeTable
 	subscribedVNIs map[VNI]bool
 
@@ -81,9 +82,9 @@ func (p *metalBondPeer) String() string {
 }
 
 func (p *metalBondPeer) GetState() ConnectionState {
-	p.stateLock.RLock()
+	p.mtxState.RLock()
 	state := p.state
-	p.stateLock.RUnlock()
+	p.mtxState.RUnlock()
 	return state
 }
 
@@ -133,9 +134,9 @@ func (p *metalBondPeer) SendUpdate(upd msgUpdate) error {
 func (p *metalBondPeer) setState(newState ConnectionState) {
 	oldState := p.state
 
-	p.stateLock.Lock()
+	p.mtxState.Lock()
 	p.state = newState
-	p.stateLock.Unlock()
+	p.mtxState.Unlock()
 
 	if oldState != newState && newState == ESTABLISHED {
 		p.metalbond.mtxMySubscriptions.RLock()
@@ -168,7 +169,7 @@ func (p *metalBondPeer) setState(newState ConnectionState) {
 
 	// Connection lost
 	if oldState != newState && newState != ESTABLISHED {
-		for vni, peers := range p.metalbond.subscriptions {
+		for vni, peers := range p.metalbond.subscribers {
 			for peer := range peers {
 				if p == peer {
 					if err := p.metalbond.removeSubscriber(p, vni); err != nil {

@@ -32,8 +32,8 @@ type MetalBond struct {
 	mtxMySubscriptions sync.RWMutex
 	mySubscriptions    map[VNI]bool
 
-	mtxSubscriptions sync.RWMutex                    // this locks a bit much (all VNIs). We could create a mutex for every VNI instead.
-	subscriptions    map[VNI]map[*metalBondPeer]bool // HashMap of HashSet
+	mtxSubscribers sync.RWMutex                    // this locks a bit much (all VNIs). We could create a mutex for every VNI instead.
+	subscribers    map[VNI]map[*metalBondPeer]bool // HashMap of HashSet
 
 	mtxPeers sync.RWMutex
 	peers    map[string]*metalBondPeer
@@ -60,7 +60,7 @@ func NewMetalBond(config Config, client Client) *MetalBond {
 		routeTable:        newRouteTable(),
 		myAnnouncements:   newRouteTable(),
 		mySubscriptions:   make(map[VNI]bool),
-		subscriptions:     make(map[VNI]map[*metalBondPeer]bool),
+		subscribers:       make(map[VNI]map[*metalBondPeer]bool),
 		keepaliveInterval: config.KeepaliveInterval,
 		peers:             map[string]*metalBondPeer{},
 		client:            client,
@@ -98,6 +98,10 @@ func (m *MetalBond) RemovePeer(addr string) error {
 	m.mtxPeers.Lock()
 	defer m.mtxPeers.Unlock()
 
+	return m.unsafeRemovePeer(addr)
+}
+
+func (m *MetalBond) unsafeRemovePeer(addr string) error {
 	m.log().Infof("Removing peer %s", addr)
 	if _, exists := m.peers[addr]; !exists {
 		m.log().Errorf("Peer %s does not exist", addr)
@@ -142,9 +146,6 @@ func (m *MetalBond) AnnounceRoute(vni VNI, dest Destination, hop NextHop) error 
 		return fmt.Errorf("Cannot announce route: %v", err)
 	}
 
-	m.mtxPeers.RLock()
-	defer m.mtxPeers.RUnlock()
-
 	if err := m.distributeRouteToPeers(ADD, vni, dest, hop, nil); err != nil {
 		m.log().Errorf("Could not distribute route to peers: %v", err)
 	}
@@ -165,9 +166,6 @@ func (m *MetalBond) WithdrawRoute(vni VNI, dest Destination, hop NextHop) error 
 	// the logic, regarding when/how nexthops or entire routes are removed from metalbond under the cases in which withdrawing or receiving deleting route messages,
 	// should be double-checked.
 	if remaining == 0 {
-		m.mtxPeers.RLock()
-		defer m.mtxPeers.RUnlock()
-
 		if err := m.distributeRouteToPeers(REMOVE, vni, dest, hop, nil); err != nil {
 			m.log().Errorf("could not distribute route to peers: %v", err)
 			return fmt.Errorf("failed to withdraw a route, for the reason: %v", err)
@@ -182,9 +180,13 @@ func (m *MetalBond) getMyAnnouncements() *routeTable {
 }
 
 func (m *MetalBond) distributeRouteToPeers(action UpdateAction, vni VNI, dest Destination, hop NextHop, fromPeer *metalBondPeer) error {
-	m.mtxSubscriptions.RLock()
-	defer m.mtxSubscriptions.RUnlock()
+	m.mtxPeers.RLock()
+	defer m.mtxPeers.RUnlock()
 
+	m.mtxSubscribers.RLock()
+	defer m.mtxSubscribers.RUnlock()
+
+	// if this node is the origin of the route (fromPeer == nil):
 	if fromPeer == nil {
 		for _, sp := range m.peers {
 			upd := msgUpdate{
@@ -202,18 +204,20 @@ func (m *MetalBond) distributeRouteToPeers(action UpdateAction, vni VNI, dest De
 		return nil
 	}
 
-	if _, exists := m.subscriptions[vni]; !exists {
+	// if no one has subscribed to this VNI, we don't need to distribute the route
+	if _, exists := m.subscribers[vni]; !exists {
 		return nil
 	}
 
-	for p := range m.subscriptions[vni] {
+	// send route to all peers who have subscribed to this VNI - with few exceptions:
+	for p := range m.subscribers[vni] {
+		// don't send route back to the peer we got it from
 		if p == fromPeer {
-			//m.log().WithField("peer", p).Debugf("Received the route from this peer. Skipping redistribution.")
 			continue
 		}
 
+		// TODO: Server to server communication
 		if fromPeer.isServer && p.isServer {
-			//m.log().WithField("peer", p).Debugf("Do not redistribute route received from another server. Skipping redistribution.")
 			continue
 		}
 
@@ -279,21 +283,22 @@ func (m *MetalBond) removeReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest D
 // Route updates belonging to the specified VNI will be sent to the peer afterwards.
 func (m *MetalBond) addSubscriber(peer *metalBondPeer, vni VNI) error {
 	m.log().Infof("addSubscriber(%s, %d)", peer, vni)
-	m.mtxSubscriptions.Lock()
+	m.mtxSubscribers.Lock()
 
-	if _, exists := m.subscriptions[vni]; !exists {
-		m.subscriptions[vni] = make(map[*metalBondPeer]bool)
+	if _, exists := m.subscribers[vni]; !exists {
+		m.subscribers[vni] = make(map[*metalBondPeer]bool)
 	}
 
-	if _, exists := m.subscriptions[vni][peer]; exists {
+	if _, exists := m.subscribers[vni][peer]; exists {
 		return fmt.Errorf("Peer is already subscribed!")
 	}
 
-	m.subscriptions[vni][peer] = true
-	m.mtxSubscriptions.Unlock()
+	m.subscribers[vni][peer] = true
+	m.mtxSubscribers.Unlock()
 
 	m.log().Infof("Peer %s added Subscription to VNI %d", peer, vni)
 
+	// TODO: we're missing a read-lock on routeTable
 	for dest, hops := range m.routeTable.GetDestinationsByVNI(vni) {
 		for _, hop := range hops {
 			err := peer.SendUpdate(msgUpdate{
@@ -339,13 +344,16 @@ func (m *MetalBond) StartServer(listenAddress string) error {
 				return
 			}
 
-			m.peers[conn.RemoteAddr().String()] = newMetalBondPeer(
+			p := newMetalBondPeer(
 				&conn,
 				conn.RemoteAddr().String(),
 				m.keepaliveInterval,
 				INCOMING,
 				m,
 			)
+			m.mtxPeers.Lock()
+			m.peers[conn.RemoteAddr().String()] = p
+			m.mtxPeers.Unlock()
 		}
 	}()
 
@@ -360,11 +368,13 @@ func (m *MetalBond) Shutdown() {
 		(*m.lis).Close()
 	}
 
+	m.mtxPeers.Lock()
 	for p := range m.peers {
-		if err := m.RemovePeer(p); err != nil {
+		if err := m.unsafeRemovePeer(p); err != nil {
 			m.log().Errorf("Error removing peer %s: %v", p, err)
 		}
 	}
+	m.mtxPeers.Unlock()
 }
 
 func (m *MetalBond) log() *logrus.Entry {
