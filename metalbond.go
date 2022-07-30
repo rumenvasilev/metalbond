@@ -22,7 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var METALBOND_VERSION = "0.1.5"
+var METALBOND_VERSION = "0.1.6"
 
 type MetalBond struct {
 	routeTable routeTable
