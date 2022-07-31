@@ -17,7 +17,7 @@ amd64:
 arm64:
 	mkdir -p target
 	rm -rf target/html && cp -ra html target
-	cd cmd && env GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/onmetal/metalbond.METALBOND_VERSION=$(GIT_COMMIT)" -o ../target/metalbond_arm64
+	cd cmd && env GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/onmetal/metalbond.METALBOND_VERSION=$(METALBOND_VERSION)" -o ../target/metalbond_arm64
 
 run-server: all
 	cd target && ./metalbond server \

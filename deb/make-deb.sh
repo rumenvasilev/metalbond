@@ -1,7 +1,8 @@
 #!/bin/bash
+set -x
 tmp_dir=$(mktemp -d)
 
-echo "Creating MetalBond Debian Package..."
+echo "Creating MetalBond Debian Package v$METALBOND_VERSION..."
 
 make $ARCHITECTURE
 
@@ -23,6 +24,6 @@ cp deb/preinst $tmp_dir/metalbond/DEBIAN/
 
 ( cd $tmp_dir && dpkg-deb --build metalbond )
 
-mv $tmp_dir/metalbond.deb target/metalbond_$METALBOND_VERSION_$ARCHITECTURE.deb
+mv $tmp_dir/metalbond.deb target/metalbond_$(echo $METALBOND_VERSION)_$ARCHITECTURE.deb
 
 rm -rf $tmp_dir
