@@ -1,5 +1,8 @@
 name: Build and Release MetalBond
 on:
+  release:
+    types:
+      - published
   push:
     tags:
     - 'v*'
