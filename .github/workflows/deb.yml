@@ -38,7 +38,7 @@ jobs:
             core.setOutput('no-dash', no_dash)
 
       - name: Upload Release Asset
-        id: upload-release-asset
+        id: upload-release-asset-amd64
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -49,7 +49,7 @@ jobs:
           asset_content_type: application/x-deb
 
       - name: Upload Release Asset
-        id: upload-release-asset
+        id: upload-release-asset-arm64
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
