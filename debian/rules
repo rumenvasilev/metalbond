@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+export DH_VERBOSE=1
+export METALBOND_VERSION=$(dpkg-parsechangelog -SVersion)
+
+%:
+	dh $@
+
+
+overwrite_dh_auto_build:
+	echo "### debug $(METALBOND_VERSION)"
+	make
+
+
+

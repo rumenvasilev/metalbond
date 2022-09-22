@@ -1,0 +1,36 @@
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+jobs:
+  build:
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        architecture: [ amd64, arm64 ]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v2
+        with:
+          name: metalbond_${{ inputs.version }}_${{ matrix.architecture }}
+
+      - name: Get Release
+        id: get_release
+        uses: bruceadams/get-release@v1.2.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to GitHub Releases
+        id: upload-release-asset-${{ matrix.architecture }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./target/metalbond_${{ inputs.version }}_${{ matrix.architecture }}.deb
+          asset_name: metalbond_${{ inputs.version }}_${{ matrix.architecture }}.deb
+          asset_content_type: application/x-deb

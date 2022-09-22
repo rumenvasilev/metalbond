@@ -1,6 +1,5 @@
 Package: metalbond
 Version: METALBOND_VERSION
-Maintainer: Malte Janduda
 Architecture: ARCHITECTURE
 Depends: libc6 (>=2.31)
 Recommends: ethtool, iproute2
