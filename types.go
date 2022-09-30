@@ -41,7 +41,7 @@ func (d Destination) String() string {
 type NextHop struct {
 	TargetAddress    netip.Addr
 	TargetVNI        uint32
-	NAT              bool
+	Type             pb.NextHopType
 	NATPortRangeFrom uint16
 	NATPortRangeTo   uint16
 }
@@ -223,7 +223,7 @@ func (msg msgUpdate) Serialize() ([]byte, error) {
 	pbmsg.NextHop.TargetVNI = msg.NextHop.TargetVNI
 	pbmsg.NextHop.TargetAddress = msg.NextHop.TargetAddress.AsSlice()
 
-	if msg.NextHop.NAT {
+	if msg.NextHop.Type != pb.NextHopType_STANDARD {
 		// TODO: Add NAT and LB Stuff
 		return nil, fmt.Errorf("NAT Update msg NOT IMPLEMENTED")
 	}
@@ -309,7 +309,7 @@ func deserializeUpdateMsg(pktBytes []byte) (*msgUpdate, error) {
 	nexthop := NextHop{
 		TargetAddress:    nhAddr,
 		TargetVNI:        pbmsg.NextHop.TargetVNI,
-		NAT:              pbmsg.NextHop.Nat,
+		Type:             pbmsg.NextHop.Type,
 		NATPortRangeFrom: uint16(pbmsg.NextHop.NatPortRangeFrom),
 		NATPortRangeTo:   uint16(pbmsg.NextHop.NatPortRangeTo),
 	}

@@ -13,6 +13,12 @@ enum Action {
     REMOVE = 1;
 }
 
+enum NextHopType {
+    STANDARD = 0;
+    NAT = 1;
+    LOADBALANCER_TARGET = 2;
+}
+
 message Hello {
     uint32 keepaliveInterval = 1;
     bool isServer = 2;
@@ -38,7 +44,9 @@ message Destination {
 message NextHop {
     bytes targetAddress = 1;
     uint32 targetVNI = 2;
-    bool nat = 3;
+    
+    NextHopType type = 3;
+    
     uint32 natPortRangeFrom = 4;
     uint32 natPortRangeTo = 5;
 }

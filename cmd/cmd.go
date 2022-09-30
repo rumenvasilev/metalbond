@@ -27,6 +27,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/onmetal/metalbond"
+	"github.com/onmetal/metalbond/pb"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -196,7 +197,7 @@ func main() {
 			hop := metalbond.NextHop{
 				TargetAddress: hopIP,
 				TargetVNI:     0,
-				NAT:           false,
+				Type:          pb.NextHopType_STANDARD,
 			}
 
 			if err := m.AnnounceRoute(metalbond.VNI(vni), dest, hop); err != nil {
