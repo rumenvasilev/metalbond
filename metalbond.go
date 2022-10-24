@@ -19,6 +19,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/onmetal/metalbond/pb"
 	"github.com/sirupsen/logrus"
 )
 
@@ -225,7 +226,8 @@ func (m *MetalBond) distributeRouteToPeers(action UpdateAction, vni VNI, dest De
 	// send route to all peers who have subscribed to this VNI - with few exceptions:
 	for p := range m.subscribers[vni] {
 		// don't send route back to the peer we got it from
-		if p == fromPeer {
+		// Except for the LB routes
+		if p == fromPeer && hop.Type != pb.NextHopType_LOADBALANCER_TARGET {
 			continue
 		}
 
@@ -256,7 +258,11 @@ func (m *MetalBond) addReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest Dest
 		return fmt.Errorf("Cannot add route to route table: %v", err)
 	}
 
-	m.log().Infof("Received Route: VNI %d, Prefix: %s, NextHop: %s", vni, dest, hop)
+	if hop.Type == pb.NextHopType_NAT {
+		m.log().Infof("Received Route: VNI %d, Prefix: %s, NextHop: %s Type: %s PortFrom: %d PortTo: %d", vni, dest, hop, hop.Type.String(), hop.NATPortRangeFrom, hop.NATPortRangeTo)
+	} else {
+		m.log().Infof("Received Route: VNI %d, Prefix: %s, NextHop: %s Type: %s", vni, dest, hop, hop.Type.String())
+	}
 
 	if err := m.distributeRouteToPeers(ADD, vni, dest, hop, fromPeer); err != nil {
 		m.log().Errorf("Could not distribute route to peers: %v", err)
@@ -276,7 +282,11 @@ func (m *MetalBond) removeReceivedRoute(fromPeer *metalBondPeer, vni VNI, dest D
 		return fmt.Errorf("Cannot remove route from route table: %v", err)
 	}
 
-	m.log().Infof("Removed Received Route: VNI %d, Prefix: %s, NextHop: %s", vni, dest, hop)
+	if hop.Type == pb.NextHopType_NAT {
+		m.log().Infof("Removed Received Route: VNI %d, Prefix: %s, NextHop: %s Type: %s PortFrom: %d PortTo: %d", vni, dest, hop, hop.Type.String(), hop.NATPortRangeFrom, hop.NATPortRangeTo)
+	} else {
+		m.log().Infof("Removed Received Route: VNI %d, Prefix: %s, NextHop: %s Type: %s", vni, dest, hop, hop.Type.String())
+	}
 
 	if remaining == 0 {
 		if err := m.distributeRouteToPeers(REMOVE, vni, dest, hop, fromPeer); err != nil {
