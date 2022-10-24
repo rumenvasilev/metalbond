@@ -9,7 +9,7 @@ on:
 
 jobs:
   set_version:
-    runs_on: self-hosted
+    runs-on: self-hosted
     steps:
       - name: Set Versions      
         uses: actions/github-script@v6
