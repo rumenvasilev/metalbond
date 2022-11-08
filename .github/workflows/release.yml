@@ -35,17 +35,30 @@ jobs:
     uses: ./.github/workflows/build-deb.yml
     with:
       version: ${{ needs.set_version.outputs.version }}
+  create_release:
+    needs: set_version
+    runs-on: self-hosted
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
   publish_github:
-    needs: [ set_version, build_deb ]
+    needs: [ create_release, build_deb ]
     uses: ./.github/workflows/publish-to-github-releases.yml
     with:
       version: ${{ needs.set_version.outputs.version }}
-  publish_gardenlinux_repo:
-    needs: [ set_version, pack_source]
-    uses: ./.github/workflows/publish-to-gardenlinux-repo.yml
-    with:
-      version: ${{ needs.set_version.outputs.version }}
-    secrets:
-      GITLAB_DEPLOY_KEY: ${{ secrets.GITLAB_DEPLOY_KEY }}
-      GITLAB_KNOWN_HOSTS: ${{ secrets.GITLAB_KNOWN_HOSTS }}
-
+#  publish_gardenlinux_repo:
+#    needs: [ set_version, pack_source]
+#    uses: ./.github/workflows/publish-to-gardenlinux-repo.yml
+#    with:
+#      version: ${{ needs.set_version.outputs.version }}
+#    secrets:
+#      GITLAB_DEPLOY_KEY: ${{ secrets.GITLAB_DEPLOY_KEY }}
+#      GITLAB_KNOWN_HOSTS: ${{ secrets.GITLAB_KNOWN_HOSTS }}
