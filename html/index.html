@@ -41,6 +41,12 @@
                 right: 1em;
                 font-size: small;
             }
+            table {
+                border: none;
+                padding-top: 0.25em;
+                padding-left: 2em;
+                margin-bottom: 1.5em;
+            }
         </style>
     </head>
     <body>
@@ -58,12 +64,18 @@
         <h3 id="vnet{{$vni}}">VNet {{$vni}}</h3>
         <ul>
             {{range $dest, $hops := $routes}}
-            <li>{{$dest}}</li>
-            <ul>
+            <li>{{$dest}} ({{ len $hops }})</li>
+            <table>
                 {{range $hop := $hops}}
-                <li>{{$hop}}</li>
+                <tr>
+                    <td>{{$hop}}</td>
+                    <td>{{$hop.Type}}</td>
+                    {{ if eq $hop.Type 1 }}
+                        <td>Port from {{$hop.NATPortRangeFrom}} to {{$hop.NATPortRangeTo}}</td>
+                    {{ end }}
+                </tr>
                 {{end}}
-            </ul>
+            </table>
             {{end}}
         </ul>
         <hr/>
