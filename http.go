@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"text/template"
 	"time"
 
@@ -25,9 +26,9 @@ import (
 )
 
 type jsonRoutes struct {
-	Date             string                         `json:"date"`
-	VNet             map[uint32]map[string][]string `json:"vnet"`
-	MetalBondVersion string                         `json:"metalbondVersion"`
+	Date             string                               `json:"date"`
+	VNet             map[uint32]map[Destination][]NextHop `json:"vnet"`
+	MetalBondVersion string                               `json:"metalbondVersion"`
 }
 
 type jsonServer struct {
@@ -56,18 +57,25 @@ func (j *jsonServer) getJsonRoutes() (jsonRoutes, error) {
 	js := jsonRoutes{
 		MetalBondVersion: METALBOND_VERSION,
 		Date:             time.Now().Format("2006-01-02 15:04:05"),
-		VNet:             make(map[uint32]map[string][]string),
+		VNet:             make(map[uint32]map[Destination][]NextHop),
 	}
 
 	for _, vni := range j.m.routeTable.GetVNIs() {
-		js.VNet[uint32(vni)] = make(map[string][]string)
+		js.VNet[uint32(vni)] = make(map[Destination][]NextHop)
 		for dst, hops := range j.m.routeTable.GetDestinationsByVNI(vni) {
 			for _, hop := range hops {
-				js.VNet[uint32(vni)][dst.String()] = append(js.VNet[uint32(vni)][dst.String()], hop.String())
+				js.VNet[uint32(vni)][dst] = append(js.VNet[uint32(vni)][dst], hop)
 			}
 		}
 	}
 
+	for vi, _ := range js.VNet {
+		for _, hops := range js.VNet[vi] {
+			sort.Slice(hops, func(i, j int) bool {
+				return hops[i].String() < hops[j].String()
+			})
+		}
+	}
 	return js, nil
 }
 
