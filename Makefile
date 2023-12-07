@@ -5,42 +5,51 @@ BUILDARGS ?=
 DEB_BUILD_CONTAINER ?= golang:1.20-bookworm
 
 ifneq ("$(wildcard ./version)","")
-	METALBOND_VERSION?=$(shell cat ./version)
+	METALBOND_VERSION ?= $(shell cat ./version)
 else ifeq ($(shell git describe --exact-match --tags 2> /dev/null),)
-	METALBOND_VERSION?=$(shell git rev-parse --short HEAD)
+	METALBOND_VERSION ?= $(shell git rev-parse --short HEAD)
 else
-	METALBOND_VERSION?=$(shell (git describe --exact-match --tags 2> /dev/null | cut -dv -f2))
+	METALBOND_VERSION ?= $(shell (git describe --exact-match --tags 2> /dev/null | cut -dv -f2))
 endif
+METALBOND_LDFLAGS = "-X github.com/ironcore-dev/metalbond.METALBOND_VERSION=$(METALBOND_VERSION)"
 
-ARCHITECTURE=$(shell dpkg --print-architecture)
+ARCHITECTURE = $(shell dpkg --print-architecture)
 
-all:
-	make $(ARCHITECTURE)
+.PHONY: all
+all: $(ARCHITECTURE)
 	cp ./target/metalbond_$(ARCHITECTURE) ./target/metalbond
 
-amd64:
-	mkdir -p target
-	rm -rf target/html && cp -a html target
-	cd cmd && go build -buildvcs=false -ldflags "-X github.com/onmetal/metalbond.METALBOND_VERSION=$(METALBOND_VERSION)" -o ../target/metalbond_amd64
+.PHONY: amd64
+amd64: target_html
+	cd cmd && go build -buildvcs=false -ldflags $(METALBOND_LDFLAGS) -o ../target/metalbond_amd64
 
-arm64:
-	mkdir -p target
-	rm -rf target/html && cp -ra html target
-	cd cmd && env GOOS=linux GOARCH=arm64 go build -buildvcs=false -ldflags "-X github.com/onmetal/metalbond.METALBOND_VERSION=$(METALBOND_VERSION)" -o ../target/metalbond_arm64
+.PHONY: arm64
+arm64: target_html
+	cd cmd && env GOOS=linux GOARCH=arm64 go build -buildvcs=false -ldflags $(METALBOND_LDFLAGS) -o ../target/metalbond_arm64
 
-tarball:
+target:
 	mkdir -p target
+
+.PHONY: target_html
+target_html: | target
+	rm -rf target/html
+	cp -ra html target
+
+.PHONY: tarball
+tarball: | target
 	rsync -a ./* target/metalbond-$(METALBOND_VERSION)/ --exclude target/
 #	echo $(METALBOND_VERSION) > target/metalbond-$(METALBOND_VERSION)/version
 	cd target && tar -czf metalbond_$(METALBOND_VERSION).orig.tar.gz metalbond-$(METALBOND_VERSION)
 	rm -rf target/metalbond-$(METALBOND_VERSION)/
 
+.PHONY: run-server
 run-server: all
 	cd target && ./metalbond server \
 		--listen [::]:4711 \
 		--http [::]:4712 \
 		--keepalive 3
 
+.PHONY: run-client1
 run-client1: all
 	cd target && sudo ./metalbond client \
 		--server [::1]:4711 \
@@ -51,6 +60,7 @@ run-client1: all
 		--install-routes 23#100 \
 		--tun overlay-tun
 
+.PHONY: run-client1b
 run-client1b: all
 	cd target && ./metalbond client \
 		--server [::1]:4711 \
@@ -59,6 +69,7 @@ run-client1b: all
 		--announce 23#2001:db8:1::/48#2001:db8::cafe \
 		--announce 23#192.168.0.0/16#2001:db8::cafe
 
+.PHONY: run-client2
 run-client2: all
 	cd target && ./metalbond client \
 		--server [::1]:4711 \
@@ -74,10 +85,11 @@ run-client2: all
 		--announce 23#2001:db8:4::/48#2001:db8::4c:beef \
 		--announce 42#10.0.0.0/8#2001:db8::beef
 
-.PHONY: proto deb
+.PHONY: proto
 proto:
 	protoc -I ./pb --go_out=. ./pb/metalbond.proto
 
+.PHONY: clean
 clean:
 	rm -rf target
 
@@ -89,10 +101,12 @@ docker-build: ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
 
+.PHONY: deb
 deb:
 	docker run --rm -v "$(PWD):/workdir" -e "METALBOND_VERSION=$(METALBOND_VERSION)" -e "ARCHITECTURE=amd64" $(DEB_BUILD_CONTAINER)  bash -c "cd /workdir && debian/make-deb.sh"
 	docker run --rm -v "$(PWD):/workdir" -e "METALBOND_VERSION=$(METALBOND_VERSION)" -e "ARCHITECTURE=arm64" $(DEB_BUILD_CONTAINER)  bash -c "cd /workdir && debian/make-deb.sh"
 
+.PHONY: unit-test
 unit-test:
 	go test -v
 
