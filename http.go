@@ -40,7 +40,7 @@ func serveJsonRouteTable(m *MetalBond, listen string) {
 	}
 }
 
-var METALBOND_VERSION string
+var METALBOND_VERSION string = "development"
 
 func (j *jsonServer) getJsonRoutes() (jsonRoutes, error) {
 	js := jsonRoutes{
