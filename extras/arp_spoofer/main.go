@@ -21,9 +21,9 @@ var cli struct {
 }
 
 var version = "unknown"
-var wg sync.WaitGroup
 
 func main() {
+	var wg sync.WaitGroup
 	var arpSpoofer *spoofer.ARPSpoofer
 	var err error
 
@@ -34,21 +34,20 @@ func main() {
 		return
 	}
 
-	if cli.Interface != "" && cli.IPPrefix != "" {
-		log.Infof("Initializing ARP spoofing on interface %s for IP range %s",
-			cli.Interface, cli.IPPrefix)
-
-		arpSpoofer, err = spoofer.NewARPSpoofer(cli.Interface, cli.IPPrefix, &wg)
-		if err != nil {
-			log.Warnf("Failed to initialize ARP spoofing: %v", err)
-			return
-		} else {
-			arpSpoofer.Start()
-		}
-	} else {
+	if cli.Interface == "" || cli.IPPrefix == "" {
 		log.Errorf("No interface or IP prefix specified.")
 		return
 	}
+
+	log.Infof("Initializing ARP spoofing on interface %s for IP range %s",
+		cli.Interface, cli.IPPrefix)
+
+	arpSpoofer, err = spoofer.NewARPSpoofer(cli.Interface, cli.IPPrefix, &wg)
+	if err != nil {
+		log.Warnf("Failed to initialize ARP spoofing: %v", err)
+		return
+	}
+	arpSpoofer.Start()
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)

@@ -29,25 +29,25 @@ func NewARPSpoofer(iface, ipPrefix string, wg *sync.WaitGroup) (*ARPSpoofer, err
 	// Parse IP prefix
 	_, ipNet, err := net.ParseCIDR(ipPrefix)
 	if err != nil {
-		return nil, fmt.Errorf("invalid IP prefix: %v", err)
+		return nil, fmt.Errorf("invalid IP prefix: %w", err)
 	}
 
 	// Get interface info
 	netIface, err := net.InterfaceByName(iface)
 	if err != nil {
-		return nil, fmt.Errorf("interface not found: %v", err)
+		return nil, fmt.Errorf("interface not found: %w", err)
 	}
 
 	// Open pcap handle for the interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open interface: %v", err)
+		return nil, fmt.Errorf("failed to open interface: %w", err)
 	}
 
 	// Set BPF filter to only capture ARP packets
 	if err := handle.SetBPFFilter("arp"); err != nil {
 		handle.Close()
-		return nil, fmt.Errorf("failed to set BPF filter: %v", err)
+		return nil, fmt.Errorf("failed to set BPF filter: %w", err)
 	}
 
 	return &ARPSpoofer{
@@ -66,26 +66,30 @@ func (spoofer *ARPSpoofer) Start() {
 	log.Infof("Using MAC address: %s", spoofer.mac.String())
 
 	spoofer.wg.Add(1) // Add this line
+	go spoofer.run(spoofer.handle)
+}
 
-	go func(wg *sync.WaitGroup, handle *pcap.Handle) {
-		stop := false
+func (spoofer *ARPSpoofer) run(handle *pcap.Handle) {
+	defer handle.Close()
+	defer spoofer.wg.Done()
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 
-		defer handle.Close()
-		defer wg.Done()
-		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-
-		for !stop {
-			select {
-			case <-spoofer.stopChan:
-				stop = true
-			case packet := <-packetSource.Packets():
-				spoofer.handlePacket(packet)
+	for {
+		select {
+		case <-spoofer.stopChan:
+			log.Infof("Stopping ARP spoofing on interface %s for IP range %s", spoofer.iface, spoofer.ipNetwork.String())
+			return
+		case packet, ok := <-packetSource.Packets():
+			if !ok || packet == nil {
+				return
 			}
+			spoofer.handlePacket(packet)
 		}
-	}(spoofer.wg, spoofer.handle)
+	}
 }
 
 func (spoofer *ARPSpoofer) handlePacket(packet gopacket.Packet) {
+	var err error
 	arpLayer := packet.Layer(layers.LayerTypeARP)
 	if arpLayer == nil {
 		return
@@ -126,12 +130,12 @@ func (spoofer *ARPSpoofer) handlePacket(packet gopacket.Packet) {
 		ComputeChecksums: true,
 	}
 
-	if err := gopacket.SerializeLayers(buffer, opts, &eth, &arpReply); err != nil {
+	if err = gopacket.SerializeLayers(buffer, opts, &eth, &arpReply); err != nil {
 		log.Errorf("Failed to serialize ARP reply: %v", err)
 		return
 	}
 
-	if err := spoofer.handle.WritePacketData(buffer.Bytes()); err != nil {
+	if err = spoofer.handle.WritePacketData(buffer.Bytes()); err != nil {
 		log.Errorf("Failed to send ARP reply: %v", err)
 		return
 	}
