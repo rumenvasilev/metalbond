@@ -54,6 +54,16 @@ func (h NextHop) String() string {
 	}
 }
 
+// Route index map types
+//
+// Structure:
+//
+//	VNI -> Destination -> NextHop -> set of peers that announced it
+type PeerSet map[*metalBondPeer]bool
+type NextHopToPeerSet map[NextHop]PeerSet
+type DestToNextHopToPeerSet map[Destination]NextHopToPeerSet
+type VniRouteIndex map[VNI]DestToNextHopToPeerSet
+
 /////////////////////////////////////////////////////////////
 //                           ENUMS                         //
 /////////////////////////////////////////////////////////////

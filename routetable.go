@@ -10,12 +10,12 @@ import (
 
 type routeTable struct {
 	rwmtx  sync.RWMutex
-	routes map[VNI]map[Destination]map[NextHop]map[*metalBondPeer]bool
+	routes VniRouteIndex
 }
 
 func newRouteTable() routeTable {
 	return routeTable{
-		routes: make(map[VNI]map[Destination]map[NextHop]map[*metalBondPeer]bool),
+		routes: make(VniRouteIndex),
 	}
 }
 
@@ -107,7 +107,7 @@ func (rt *routeTable) RemoveNextHop(vni VNI, dest Destination, nh NextHop, recei
 	defer rt.rwmtx.Unlock()
 
 	if rt.routes == nil {
-		rt.routes = make(map[VNI]map[Destination]map[NextHop]map[*metalBondPeer]bool)
+		rt.routes = make(VniRouteIndex)
 	}
 
 	// TODO Performance: reused found map pointers
@@ -151,15 +151,15 @@ func (rt *routeTable) AddNextHop(vni VNI, dest Destination, nh NextHop, received
 
 	// TODO Performance: reused found map pointers
 	if _, exists := rt.routes[vni]; !exists {
-		rt.routes[vni] = make(map[Destination]map[NextHop]map[*metalBondPeer]bool)
+		rt.routes[vni] = make(DestToNextHopToPeerSet)
 	}
 
 	if _, exists := rt.routes[vni][dest]; !exists {
-		rt.routes[vni][dest] = make(map[NextHop]map[*metalBondPeer]bool)
+		rt.routes[vni][dest] = make(NextHopToPeerSet)
 	}
 
 	if _, exists := rt.routes[vni][dest][nh]; !exists {
-		rt.routes[vni][dest][nh] = make(map[*metalBondPeer]bool)
+		rt.routes[vni][dest][nh] = make(PeerSet)
 	}
 
 	if _, exists := rt.routes[vni][dest][nh][receivedFrom]; exists {
@@ -177,15 +177,15 @@ func (rt *routeTable) NextHopExists(vni VNI, dest Destination, nh NextHop, recei
 
 	// TODO Performance: reused found map pointers
 	if _, exists := rt.routes[vni]; !exists {
-		rt.routes[vni] = make(map[Destination]map[NextHop]map[*metalBondPeer]bool)
+		rt.routes[vni] = make(DestToNextHopToPeerSet)
 	}
 
 	if _, exists := rt.routes[vni][dest]; !exists {
-		rt.routes[vni][dest] = make(map[NextHop]map[*metalBondPeer]bool)
+		rt.routes[vni][dest] = make(NextHopToPeerSet)
 	}
 
 	if _, exists := rt.routes[vni][dest][nh]; !exists {
-		rt.routes[vni][dest][nh] = make(map[*metalBondPeer]bool)
+		rt.routes[vni][dest][nh] = make(PeerSet)
 	}
 
 	if _, exists := rt.routes[vni][dest][nh][receivedFrom]; exists {
